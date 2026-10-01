@@ -216,6 +216,47 @@ serve(async (req) => {
       if (!stripeKey) return serverError(new Error("STRIPE_SECRET_KEY missing"));
       const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
+      // The purchase ledger is deliberately pre-tax. Stripe refunds move cash,
+      // so taxed purchases must refund the proportional tax as well. The final
+      // pre-tax refund receives the exact remaining Stripe cash to eliminate
+      // one-cent rounding drift across earlier partial refunds.
+      let stripeRefundAmount = refundAmount;
+      if (!requestRow.stripe_refund_id) {
+        const paymentIntent = await stripe.paymentIntents.retrieve(
+          purchase.stripe_payment_intent,
+          { expand: ["latest_charge"] },
+        );
+        let charge: Stripe.Charge | null = null;
+        if (typeof paymentIntent.latest_charge === "string") {
+          charge = await stripe.charges.retrieve(paymentIntent.latest_charge);
+        } else if (paymentIntent.latest_charge && !("deleted" in paymentIntent.latest_charge)) {
+          charge = paymentIntent.latest_charge as Stripe.Charge;
+        }
+
+        if (!charge || charge.status !== "succeeded") {
+          return serverError(new Error("Unable to resolve succeeded Stripe charge for refund"));
+        }
+
+        const originalSubtotal = Number(purchase.amount_cents ?? 0);
+        const remainingStripeCash = Math.max(
+          0,
+          Number(charge.amount ?? 0) - Number(charge.amount_refunded ?? 0),
+        );
+        if (!Number.isInteger(originalSubtotal) || originalSubtotal <= 0 || remainingStripeCash <= 0) {
+          return badRequest("No refundable Stripe balance remains");
+        }
+
+        stripeRefundAmount = refundAmount === remainingBefore
+          ? remainingStripeCash
+          : Math.max(
+              1,
+              Math.min(
+                remainingStripeCash,
+                Math.round(refundAmount * Number(charge.amount ?? 0) / originalSubtotal),
+              ),
+            );
+      }
+
       let refund: Stripe.Refund;
       try {
         if (requestRow.stripe_refund_id) {
@@ -223,7 +264,7 @@ serve(async (req) => {
         } else {
           refund = await stripe.refunds.create({
             payment_intent: purchase.stripe_payment_intent,
-            amount: refundAmount,
+            amount: stripeRefundAmount,
             reason: parsed.reason ?? "requested_by_customer",
             metadata: {
               purchase_id: purchase.id,
@@ -297,7 +338,8 @@ serve(async (req) => {
           refund_id: refund.id,
           stripe_status: refund.status,
           refund_request_id: requestRow.id,
-          amount_cents: refund.amount,
+          amount_cents: refundAmount,
+          stripe_refund_total_cents: refund.amount,
           correlation_id: corr,
         }, terminalFailure ? 502 : 202);
       }
@@ -307,7 +349,7 @@ serve(async (req) => {
         {
           _purchase_id: purchase.id,
           _refund_event_id: refund.id,
-          _refund_amount_cents: refund.amount,
+          _refund_amount_cents: refundAmount,
         },
       );
       if (ledgerError) {
@@ -368,7 +410,8 @@ serve(async (req) => {
         user_id: auth.userId,
         payload: {
           refund_id: refund.id,
-          amount_cents: refund.amount,
+          amount_cents: refundAmount,
+          stripe_refund_total_cents: refund.amount,
           refund_request_id: requestRow.id,
           fully_refunded: ledger.fully_refunded === true,
           refunded_total_cents: ledger.refunded_total_cents ?? null,
@@ -381,7 +424,8 @@ serve(async (req) => {
         idempotent: ledger.idempotent === true,
         refund_id: refund.id,
         refund_request_id: requestRow.id,
-        amount_cents: refund.amount,
+        amount_cents: refundAmount,
+        stripe_refund_total_cents: refund.amount,
         fully_refunded: ledger.fully_refunded === true,
         refunded_total_cents: ledger.refunded_total_cents ?? null,
         remaining_cents: ledger.remaining_cents ?? null,
