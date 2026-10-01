@@ -684,7 +684,7 @@ serve(async (req) => {
       if (!purchase) {
         const { data: billingOrder, error: billingOrderError } = await supabase
           .from("billing_orders")
-          .select("id,user_id")
+          .select("id,user_id,expected_amount_cents")
           .eq("stripe_payment_intent_id", paymentIntentId)
           .maybeSingle();
 
