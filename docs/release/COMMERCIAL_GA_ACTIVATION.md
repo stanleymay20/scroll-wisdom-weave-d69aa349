@@ -106,6 +106,20 @@ STRIPE_PRICE_PUBLISH_ASSISTED_LAUNCH=price_1ULkFIJYFIBeCvefbGw8qpDf
 
 Do not open specialized generation merely because commercial GA is open.
 
+## Checkout consent gate
+
+All new economic-v1 subscriptions, billing orders, and paid marketplace book checkouts
+require Stripe Checkout's Terms checkbox and carry
+`commercialConsentVersion=eu-digital-v1`. Fulfillment fails closed when that version is
+present but Stripe does not report `consent.terms_of_service=accepted`.
+
+Before opening paid writes, configure the connected Stripe account's public business
+profile with the real ScrollLibrary merchant identity and a valid Terms of Service URL.
+Stripe requires that public Terms URL before a Checkout Session can require Terms consent.
+The custom acceptance text requests immediate digital performance and acknowledges the
+withdrawal consequence described in the Terms. Legal wording and merchant identity still
+require merchant/legal review; code must not invent them.
+
 ## Tax launch gate
 
 Checkout enables Stripe automatic tax, billing-address collection, and tax-ID collection.
