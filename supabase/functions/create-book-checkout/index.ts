@@ -317,6 +317,10 @@ serve(async (req) => {
           },
         },
       ],
+      automatic_tax: { enabled: true },
+      tax_id_collection: { enabled: true, required: "never" },
+      billing_address_collection: "auto",
+      customer_update: { address: "auto", name: "auto" },
       success_url: `${origin}/store/${listing.slug}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/store/${listing.slug}?canceled=1`,
       metadata: {
