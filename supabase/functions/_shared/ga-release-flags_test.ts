@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { advancedAuthoringEnabled, advancedBookTypeEnabled, externalPaymentWritesEnabled, publicationMintEnabled, publishingServiceBillingEnabled, qualificationBookTypeEnabled, qualifiedAdvancedBookTypes, specializedAuthoringEnabled } from "./ga-release-flags.ts";
+import { advancedAuthoringEnabled, advancedBookTypeEnabled, externalPaymentWritesEnabled, marketplacePaymentsEnabled, publicationMintEnabled, publishingServiceBillingEnabled, qualificationBookTypeEnabled, qualifiedAdvancedBookTypes, specializedAuthoringEnabled } from "./ga-release-flags.ts";
 
 Deno.test("GA payment writes default closed for empty or invalid values", () => {
   for (const value of ["", "false", "0", "no", "enabled", "TRUE-ish"]) {
@@ -94,5 +94,18 @@ Deno.test("publishing-service billing defaults closed independently of payment w
 Deno.test("publishing-service billing opens only for explicit affirmative values", () => {
   for (const value of ["true", "TRUE", "1", "yes", " Yes "]) {
     assertEquals(publishingServiceBillingEnabled(value), true);
+  }
+});
+
+
+Deno.test("GA marketplace payments default closed independently of general payments", () => {
+  for (const value of ["", "false", "0", "no", "enabled", "TRUE-ish"]) {
+    assertEquals(marketplacePaymentsEnabled(value), false);
+  }
+});
+
+Deno.test("GA marketplace payments open only for explicit affirmative values", () => {
+  for (const value of ["true", "TRUE", "1", "yes", " Yes "]) {
+    assertEquals(marketplacePaymentsEnabled(value), true);
   }
 });
