@@ -57,7 +57,10 @@ serve(async (req) => {
   }
 
   let visualReservation: {
-    client: ReturnType<typeof createClient>;
+    // Schema-untyped service client; keeping this local handle as any avoids
+    // Deno collapsing rpc() args to never/undefined on generic ReturnType.
+    // deno-lint-ignore no-explicit-any
+    client: any;
     userId: string;
     month: string;
     units: number;
