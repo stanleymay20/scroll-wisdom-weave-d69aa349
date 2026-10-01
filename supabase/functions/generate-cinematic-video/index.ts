@@ -57,23 +57,19 @@ serve(async (req) => {
   }
 
   let visualReservation: {
-    client: ReturnType<typeof createClient>;
     userId: string;
     month: string;
     units: number;
+    release: (units: number) => Promise<void>;
   } | null = null;
 
   const refundVisualReservation = async (units?: number) => {
     if (!visualReservation) return;
     const releaseUnits = Math.min(units ?? visualReservation.units, visualReservation.units);
     if (releaseUnits <= 0) return;
-    const { error } = await visualReservation.client.rpc("release_billing_usage", {
-      _user_id: visualReservation.userId,
-      _month: visualReservation.month,
-      _metric: "visual_credits",
-      _units: releaseUnits,
-    });
-    if (error) {
+    try {
+      await visualReservation.release(releaseUnits);
+    } catch (error) {
       console.error("[CINEMATIC-VIDEO] Failed to refund visual credits:", error);
       return;
     }
@@ -277,10 +273,18 @@ DIRECTING RULES:
     }
 
     visualReservation = {
-      client: supabaseAdmin,
       userId,
       month: currentMonth,
       units: requestedVisualCredits,
+      release: async (units: number) => {
+        const { error } = await supabaseAdmin.rpc("release_billing_usage", {
+          _user_id: userId,
+          _month: currentMonth,
+          _metric: "visual_credits",
+          _units: units,
+        });
+        if (error) throw error;
+      },
     };
 
     const imageResults = await Promise.allSettled(
