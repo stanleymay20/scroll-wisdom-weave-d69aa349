@@ -43,6 +43,13 @@ export const COMMERCIAL_GA_ENABLED = explicitClientFlag(
   import.meta.env.VITE_COMMERCIAL_GA_ENABLED,
 );
 
+// Creator marketplace money movement has an additional dependency: verified
+// seller payout settlement. Keep it independently fail-closed even when SaaS
+// subscriptions and ScrollLibrary Press commerce are live.
+export const MARKETPLACE_GA_ENABLED = explicitClientFlag(
+  import.meta.env.VITE_MARKETPLACE_GA_ENABLED,
+);
+
 export const SPECIALIZED_AUTHORING_ENABLED = explicitClientFlag(
   import.meta.env.VITE_SPECIALIZED_AUTHORING_ENABLED,
 );
@@ -72,7 +79,8 @@ export const FEATURES = {
   // authoritative even when these browser surfaces are enabled.
   enablePaidCheckout: COMMERCIAL_GA_ENABLED,
   enableSubscriptionCheckout: COMMERCIAL_GA_ENABLED,
-  enableStripeConnect: COMMERCIAL_GA_ENABLED,
+  enableStripeConnect: MARKETPLACE_GA_ENABLED,
+  enableMarketplace: MARKETPLACE_GA_ENABLED,
   enableSpecializedAuthoring: SPECIALIZED_AUTHORING_ENABLED,
   enableAdvancedAuthoring: COMMERCIAL_GA_ENABLED,
   enableChapterRegeneration: COMMERCIAL_GA_ENABLED,
