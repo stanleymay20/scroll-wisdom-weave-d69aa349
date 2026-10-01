@@ -2,6 +2,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { preflight, json, serverError, requireUser, serviceClient } from "../_shared/http.ts";
 
+type PayoutBalanceRow = {
+  currency: string | null;
+  eligible_cents: number | null;
+  reserved_cents: number | null;
+  transferred_cents: number | null;
+  payable_cents: number | null;
+};
+
 serve(async (req) => {
   const pre = preflight(req); if (pre) return pre;
   const auth = await requireUser(req);
@@ -44,15 +52,16 @@ serve(async (req) => {
     if (payoutTransfersError) return serverError(payoutTransfersError, "payout_transfers_query_failed");
 
     const primaryCurrency = String(sales[0]?.currency ?? "usd").toLowerCase();
-    const primaryPayout = ((payoutBalances ?? []) as any[])
+    const payoutRows = (payoutBalances ?? []) as PayoutBalanceRow[];
+    const primaryPayout = payoutRows
       .find((row) => String(row.currency ?? "").toLowerCase() === primaryCurrency);
     const nowMs = Date.now();
     const pendingMaturityCents = sales
-      .filter((row: any) => {
+      .filter((row) => {
         const availableAt = row.available_at ? Date.parse(row.available_at) : Number.POSITIVE_INFINITY;
         return availableAt > nowMs && !row.hold_reason;
       })
-      .reduce((sum: number, row: any) => sum + Number(row.creator_net_cents ?? 0), 0);
+      .reduce((sum: number, row) => sum + Number(row.creator_net_cents ?? 0), 0);
 
     const totals = {
       currency: sales[0]?.currency ?? "usd",
