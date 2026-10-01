@@ -244,7 +244,7 @@ const App = () => (
                         <Route
                           path="/store"
                           element={
-                            FEATURES.enablePaidCheckout
+                            FEATURES.enableMarketplace
                               ? withRecovery('Storefront', <Storefront />)
                               : <Navigate to="/explore" replace />
                           }
