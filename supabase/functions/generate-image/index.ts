@@ -19,23 +19,23 @@ serve(async (req) => {
   }
 
   let visualReservation: {
-    client: ReturnType<typeof createClient>;
     userId: string;
     month: string;
     units: number;
+    release: (units: number) => Promise<void>;
   } | null = null;
 
   const refundVisualReservation = async () => {
     if (!visualReservation) return;
     const reservation = visualReservation;
     visualReservation = null;
-    const { error } = await reservation.client.rpc("release_billing_usage", {
-      _user_id: reservation.userId,
-      _month: reservation.month,
-      _metric: "visual_credits",
-      _units: reservation.units,
-    });
-    if (error) logStep("Visual reservation refund failed", { message: error.message });
+    try {
+      await reservation.release(reservation.units);
+    } catch (error) {
+      logStep("Visual reservation refund failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   };
 
   try {
@@ -149,10 +149,18 @@ serve(async (req) => {
     }
 
     visualReservation = {
-      client: supabase,
       userId: user.id,
       month: currentMonth,
       units: 1,
+      release: async (units: number) => {
+        const { error } = await supabase.rpc("release_billing_usage", {
+          _user_id: user.id,
+          _month: currentMonth,
+          _metric: "visual_credits",
+          _units: units,
+        });
+        if (error) throw error;
+      },
     };
 
     const { 
