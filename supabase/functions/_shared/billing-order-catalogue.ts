@@ -37,7 +37,7 @@ export const ONE_TIME_BILLING_CATALOGUE: Readonly<Record<OneTimeBillingSku, OneT
     amountCents: 1500,
     currency: "usd",
     priceEnv: "STRIPE_PRICE_ADDON_AI_TEXT_250K",
-    grant: { metric: "ai_text_words", units: 250_000 },
+    grant: { metric: "ai_text_words" as const, units: 250_000 },
   }),
   visual_50: Object.freeze({
     sku: "visual_50",
@@ -46,7 +46,7 @@ export const ONE_TIME_BILLING_CATALOGUE: Readonly<Record<OneTimeBillingSku, OneT
     amountCents: 2000,
     currency: "usd",
     priceEnv: "STRIPE_PRICE_ADDON_VISUAL_50",
-    grant: { metric: "visual_credits", units: 50 },
+    grant: { metric: "visual_credits" as const, units: 50 },
   }),
   audio_60: Object.freeze({
     sku: "audio_60",
@@ -55,7 +55,7 @@ export const ONE_TIME_BILLING_CATALOGUE: Readonly<Record<OneTimeBillingSku, OneT
     amountCents: 1500,
     currency: "usd",
     priceEnv: "STRIPE_PRICE_ADDON_AUDIO_60",
-    grant: { metric: "audio_credits", units: 60 },
+    grant: { metric: "audio_credits" as const, units: 60 },
   }),
   single_edition: Object.freeze({
     sku: "single_edition",
