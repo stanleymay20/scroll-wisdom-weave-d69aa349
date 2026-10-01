@@ -164,7 +164,7 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public
-AS $
+AS $$
   WITH verified AS (
     SELECT p.user_id
     FROM public.creator_payout_profiles p
@@ -230,7 +230,7 @@ AS $
     b.creator_user_id,
     b.currency
   LIMIT LEAST(GREATEST(COALESCE(_limit, 25), 1), 100);
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.list_creator_payout_candidates(integer, integer)
   FROM PUBLIC, anon, authenticated;
