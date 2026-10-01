@@ -16,7 +16,7 @@ serve(async (req) => {
     // Ledger rows
     const { data: ledger, error: ledgerErr } = await sc
       .from("creator_earnings_ledger")
-      .select("purchase_id,entry_type,gross_cents,platform_fee_cents,creator_net_cents,currency,payout_status,occurred_at,book_id,book_title_snapshot,listing_id,listing_slug_snapshot")
+      .select("purchase_id,entry_type,gross_cents,platform_fee_cents,creator_net_cents,currency,payout_status,available_at,hold_reason,chargeback_status,fraud_flags,occurred_at,book_id,book_title_snapshot,listing_id,listing_slug_snapshot")
       .eq("creator_user_id", userId)
       .order("occurred_at", { ascending: false })
       .limit(2000);
@@ -29,6 +29,31 @@ serve(async (req) => {
       refunds.map((r) => r.purchase_id).filter((id): id is string => Boolean(id)),
     );
 
+    const { data: payoutBalances, error: payoutBalanceError } = await sc.rpc(
+      "get_creator_payout_balance",
+      { _creator_user_id: userId },
+    );
+    if (payoutBalanceError) return serverError(payoutBalanceError, "payout_balance_query_failed");
+
+    const { data: recentPayoutTransfers, error: payoutTransfersError } = await sc
+      .from("creator_payout_transfers")
+      .select("id,currency,amount_cents,status,stripe_transfer_id,reserved_at,transferred_at,failed_at,failure_code")
+      .eq("creator_user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(25);
+    if (payoutTransfersError) return serverError(payoutTransfersError, "payout_transfers_query_failed");
+
+    const primaryCurrency = String(sales[0]?.currency ?? "usd").toLowerCase();
+    const primaryPayout = ((payoutBalances ?? []) as any[])
+      .find((row) => String(row.currency ?? "").toLowerCase() === primaryCurrency);
+    const nowMs = Date.now();
+    const pendingMaturityCents = sales
+      .filter((row: any) => {
+        const availableAt = row.available_at ? Date.parse(row.available_at) : Number.POSITIVE_INFINITY;
+        return availableAt > nowMs && !row.hold_reason;
+      })
+      .reduce((sum: number, row: any) => sum + Number(row.creator_net_cents ?? 0), 0);
+
     const totals = {
       currency: sales[0]?.currency ?? "usd",
       gross_cents: sum(sales, "gross_cents"),
@@ -38,12 +63,8 @@ serve(async (req) => {
       sales_count: sales.length,
       refund_count: refundedPurchaseIds.size,
       refund_event_count: refunds.length,
-      available_payout_cents: (ledger ?? [])
-        .filter((r) => r.payout_status === "available")
-        .reduce((a, r) => a + (r.creator_net_cents ?? 0), 0),
-      pending_payout_cents: (ledger ?? [])
-        .filter((r) => r.payout_status === "pending" && r.entry_type === "sale")
-        .reduce((a, r) => a + (r.creator_net_cents ?? 0), 0),
+      available_payout_cents: Number(primaryPayout?.payable_cents ?? 0),
+      pending_payout_cents: pendingMaturityCents,
     };
 
     // Daily series (last 30 days)
@@ -224,6 +245,10 @@ serve(async (req) => {
       top_books: top_books_with_rpv,
       export_attribution,
       recent: (ledger ?? []).slice(0, 25),
+      payouts: {
+        balances: payoutBalances ?? [],
+        recent_transfers: recentPayoutTransfers ?? [],
+      },
       generated_at: new Date().toISOString(),
     });
   } catch (e) { return serverError(e); }
