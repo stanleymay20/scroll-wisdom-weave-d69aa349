@@ -70,6 +70,7 @@ requireText(clientConfig, "enableMarketplace: MARKETPLACE_GA_ENABLED", "marketpl
 requireText(bookCheckout, "marketplacePaymentsEnabled()", "server marketplace payment gate");
 requireText(payoutSettlement, "marketplacePayoutsEnabled()", "independent server marketplace payout gate");
 requireText(payoutSettlement, "reserve_creator_payout", "marketplace payout database reservation");
+requireText(payoutSettlement, "list_creator_payout_candidates", "marketplace payout retry-aware candidate authority");
 requireText(seller, "PAID_SALES_ENABLED = FEATURES.enableMarketplace", "seller wizard follows marketplace payout-ready gate");
 rejectText(seller, "PMF_MODE", "seller wizard still coupled to PMF mode");
 requireText(ownerControls, "isBookTypeReleasedForClient", "book-type mutation uses provider qualification helper");
