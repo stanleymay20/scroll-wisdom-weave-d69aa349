@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { BILLING_PLAN_LIMITS, billingPlanFor } from "../_shared/billing-plans.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,6 +56,34 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let visualReservation: {
+    // Schema-untyped service client; keeping this local handle as any avoids
+    // Deno collapsing rpc() args to never/undefined on generic ReturnType.
+    // deno-lint-ignore no-explicit-any
+    client: any;
+    userId: string;
+    month: string;
+    units: number;
+  } | null = null;
+
+  const refundVisualReservation = async (units?: number) => {
+    if (!visualReservation) return;
+    const releaseUnits = Math.min(units ?? visualReservation.units, visualReservation.units);
+    if (releaseUnits <= 0) return;
+    const { error } = await visualReservation.client.rpc("release_billing_usage", {
+      _user_id: visualReservation.userId,
+      _month: visualReservation.month,
+      _metric: "visual_credits",
+      _units: releaseUnits,
+    });
+    if (error) {
+      console.error("[CINEMATIC-VIDEO] Failed to refund visual credits:", error);
+      return;
+    }
+    visualReservation.units -= releaseUnits;
+    if (visualReservation.units <= 0) visualReservation = null;
+  };
+
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -74,7 +103,9 @@ serve(async (req) => {
           .select("tier, status")
           .eq("user_id", user.id)
           .maybeSingle();
-        userTier = (sub?.status === "active" && sub?.tier) ? sub.tier : "free";
+        userTier = billingPlanFor(
+          (sub?.status === "active" || sub?.status === "trialing") ? sub.tier : "free",
+        );
       }
     }
 
@@ -93,54 +124,9 @@ serve(async (req) => {
       });
     }
 
-    // Server-side video quota enforcement
-    const VIDEO_QUOTAS: Record<string, number> = { premium: 20, prophet_tier: 50 };
-    const videoQuota = VIDEO_QUOTAS[userTier] ?? 0;
-
-    if (userId && videoQuota > 0) {
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const { count } = await supabaseAdmin
-        .from("ai_usage_tracking")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("feature", "cinematic_video")
-        .gte("created_at", `${currentMonth}-01T00:00:00Z`);
-
-      if ((count ?? 0) >= videoQuota) {
-        return new Response(JSON.stringify({
-          error: `Monthly cinematic video limit reached (${videoQuota}). ${userTier === "premium" ? "Upgrade to Teams for more." : "Limit resets next month."}`,
-        }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-    }
-
-    // Cost circuit breaker: if user's total monthly AI spend exceeds 60% of tier revenue, throttle
-    if (userId) {
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const { count: totalOps } = await supabaseAdmin
-        .from("ai_usage_tracking")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .gte("created_at", `${currentMonth}-01T00:00:00Z`);
-
-      // Rough cost estimate: each op ~$0.03 avg, Pro revenue $19, Teams $79
-      const estimatedCost = (totalOps ?? 0) * 0.03;
-      const revenueThreshold = userTier === "prophet_tier" ? 79 * 0.6 : 19 * 0.6;
-
-      if (estimatedCost > revenueThreshold) {
-        console.warn(`[CINEMATIC-VIDEO] Cost circuit breaker: user ${userId?.slice(0,8)} estimated $${estimatedCost.toFixed(2)} exceeds ${revenueThreshold}`);
-        // Don't block, but log for monitoring. Could throttle in future.
-      }
-    }
-
-    // Track usage
-    if (userId) {
-      supabaseAdmin.from("ai_usage_tracking").insert({
-        user_id: userId,
-        feature: "cinematic_video",
-        credits_used: scenePlan ? 5 : 1,
-        model_used: scenePlan ? "gemini-3-pro-image-preview" : "gemini-2.5-flash",
-      }).then(() => {});
-    }
+    // Cinematic cost is enforced by weighted visual credits at image-generation
+    // time. A cinematic scene costs 2 visual credits; planning itself does not
+    // allocate an additional "video count" allowance.
 
     const resolvedType = bookType || "standard";
 
@@ -247,6 +233,59 @@ DIRECTING RULES:
     const batch = (scenes as any[]).slice(batchStart, batchStart + batchSize);
     const imageStyle = getBookTypeImageStyle(resolvedType);
 
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Authentication required" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const visualCreditsPerScene = 2;
+    const requestedVisualCredits = Math.max(1, batch.length * visualCreditsPerScene);
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const visualLimit = BILLING_PLAN_LIMITS[billingPlanFor(userTier)].visualCreditsPerMonth;
+    const { data: visualData, error: visualError } = await supabaseAdmin.rpc(
+      "reserve_billing_usage",
+      {
+        _user_id: userId,
+        _month: currentMonth,
+        _metric: "visual_credits",
+        _units: requestedVisualCredits,
+        _base_limit: visualLimit,
+      },
+    );
+
+    if (visualError) {
+      return new Response(JSON.stringify({
+        error: "Unable to verify visual credits right now.",
+        code: "VISUAL_METER_UNAVAILABLE",
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const visualUsage = (Array.isArray(visualData) ? visualData[0] : visualData) as
+      { allowed: boolean; used: number; remaining: number; effective_limit: number } | null;
+
+    if (!visualUsage?.allowed) {
+      return new Response(JSON.stringify({
+        error: "Not enough visual credits for this cinematic batch.",
+        code: "VISUAL_CREDITS_EXHAUSTED",
+        usage: visualUsage,
+      }), {
+        status: 402,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    visualReservation = {
+      client: supabaseAdmin,
+      userId,
+      month: currentMonth,
+      units: requestedVisualCredits,
+    };
+
     const imageResults = await Promise.allSettled(
       batch.map(async (scene: any) => {
         const prompt = `Create a photorealistic cinematic image. ${scene.imagePrompt}
@@ -289,13 +328,22 @@ CRITICAL RULES:
 
     const images: Record<number, string> = {};
     let rateLimited = false;
+    let failedImages = 0;
     imageResults.forEach((r) => {
       if (r.status === "fulfilled") {
         images[r.value.sceneNumber] = r.value.imageUrl;
-      } else if (r.reason?.message === "rate_limited") {
-        rateLimited = true;
+      } else {
+        failedImages += 1;
+        if (r.reason?.message === "rate_limited") rateLimited = true;
       }
     });
+
+    // Failed provider images do not consume the customer's visual credits.
+    if (failedImages > 0) {
+      await refundVisualReservation(failedImages * visualCreditsPerScene);
+    }
+    // Remaining reserved credits correspond to successfully generated images.
+    visualReservation = null;
 
     return new Response(JSON.stringify({
       phase: "images",
@@ -310,6 +358,7 @@ CRITICAL RULES:
     });
 
   } catch (error) {
+    await refundVisualReservation();
     console.error("Cinematic video error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),

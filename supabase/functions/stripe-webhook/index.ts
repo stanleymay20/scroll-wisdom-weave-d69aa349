@@ -499,6 +499,87 @@ serve(async (req) => {
       });
     };
 
+    const settleBillingOrder = async (
+      session: Stripe.Checkout.Session,
+      source: string,
+    ) => {
+      const orderId = session.metadata?.orderId ?? null;
+      const metadataUserId = session.metadata?.userId ?? null;
+      const sku = session.metadata?.sku ?? null;
+      const sessionCustomerId = typeof session.customer === "string"
+        ? session.customer
+        : session.customer?.id ?? null;
+
+      if (!orderId || !metadataUserId || !sku || !sessionCustomerId) {
+        throw new Error("Billing order checkout is missing canonical metadata");
+      }
+
+      const linkedUserId = await findUserIdByCustomer(sessionCustomerId);
+      if (linkedUserId !== metadataUserId) {
+        throw new Error("Billing order checkout customer/user identity mismatch");
+      }
+
+      const { data: order, error: orderError } = await supabase
+        .from("billing_orders")
+        .select("id,user_id,kind,sku,status,expected_amount_cents,currency,stripe_customer_id,stripe_session_id")
+        .eq("id", orderId)
+        .maybeSingle();
+
+      if (orderError) throw new Error("Billing order lookup failed: " + orderError.message);
+      if (!order) throw new Error("Billing order not found for Checkout Session");
+      if (order.user_id !== metadataUserId || order.sku !== sku) {
+        throw new Error("Billing order metadata does not match authoritative order");
+      }
+      if (order.stripe_customer_id && order.stripe_customer_id !== sessionCustomerId) {
+        throw new Error("Billing order customer does not match authoritative order");
+      }
+      if (order.stripe_session_id && order.stripe_session_id !== session.id) {
+        throw new Error("Billing order session does not match authoritative order");
+      }
+
+      const amountTotal = Number(session.amount_total ?? -1);
+      const currency = String(session.currency ?? "").toLowerCase();
+      if (amountTotal !== Number(order.expected_amount_cents)
+          || currency !== String(order.currency).toLowerCase()) {
+        throw new Error("Billing order amount/currency mismatch");
+      }
+
+      const paymentIntentId = typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : session.payment_intent?.id ?? "";
+
+      const { data: result, error: settleError } = await supabase.rpc(
+        "settle_billing_order",
+        {
+          _order_id: order.id,
+          _stripe_session_id: session.id,
+          _stripe_payment_intent_id: paymentIntentId,
+          _stripe_customer_id: sessionCustomerId,
+        },
+      );
+      if (settleError) {
+        throw new Error("Billing order fulfillment failed: " + settleError.message);
+      }
+
+      await logFinancialEvent(supabase, {
+        event_type: "billing_order_paid",
+        severity: "info",
+        actor: "webhook",
+        correlation_id: corr,
+        stripe_event_id: event.id,
+        user_id: metadataUserId,
+        payload: {
+          order_id: order.id,
+          kind: order.kind,
+          sku: order.sku,
+          amount_cents: amountTotal,
+          currency,
+          source,
+          idempotent: (result as { idempotent?: boolean } | null)?.idempotent === true,
+        },
+      });
+    };
+
     const reconcileRefund = async (
       refund: Stripe.Refund,
       source: string,
@@ -550,9 +631,48 @@ serve(async (req) => {
         throw new Error(`Refund purchase lookup failed: ${purchaseError.message}`);
       }
       if (!purchase) {
-        // Subscription or another non-book payment: this webhook owns only the
-        // ScrollLibrary book-purchase ledger for refund accounting.
-        logStep("Refund does not map to a book purchase", {
+        const { data: billingOrder, error: billingOrderError } = await supabase
+          .from("billing_orders")
+          .select("id,user_id")
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .maybeSingle();
+
+        if (billingOrderError) {
+          throw new Error("Billing order refund lookup failed: " + billingOrderError.message);
+        }
+
+        if (billingOrder) {
+          const { data: refundResult, error: refundError } = await supabase.rpc(
+            "record_billing_order_refund",
+            {
+              _order_id: billingOrder.id,
+              _stripe_refund_id: refund.id,
+              _amount_cents: refund.amount,
+            },
+          );
+          if (refundError) {
+            throw new Error("Billing order refund reconciliation failed: " + refundError.message);
+          }
+
+          await logFinancialEvent(supabase, {
+            event_type: "billing_order_refunded",
+            severity: "warn",
+            actor: "webhook",
+            correlation_id: corr,
+            stripe_event_id: event.id,
+            user_id: billingOrder.user_id,
+            payload: {
+              order_id: billingOrder.id,
+              refund_id: refund.id,
+              amount_cents: refund.amount,
+              source,
+              fully_refunded: (refundResult as { fully_refunded?: boolean } | null)?.fully_refunded === true,
+            },
+          });
+          return;
+        }
+
+        logStep("Refund does not map to a book purchase or billing order", {
           refundId: refund.id,
           paymentIntentId,
           source,
@@ -659,6 +779,18 @@ serve(async (req) => {
             break;
           }
 
+          if (session.mode === "payment" && session.metadata?.kind === "billing_order") {
+            if (session.payment_status === "paid") {
+              await settleBillingOrder(session, "checkout_completed");
+            } else {
+              logStep("Billing order checkout completed but payment is pending", {
+                sessionId: session.id,
+                paymentStatus: session.payment_status,
+              });
+            }
+            break;
+          }
+
           if (session.mode === "subscription" && session.subscription) {
             const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
             const productId = subscription.items.data[0]?.price?.product as string;
@@ -704,6 +836,8 @@ serve(async (req) => {
           const session = event.data.object as Stripe.Checkout.Session;
           if (session.mode === "payment" && session.metadata?.kind === "book_purchase") {
             await settleBookPurchase(session, "checkout_async_succeeded");
+          } else if (session.mode === "payment" && session.metadata?.kind === "billing_order") {
+            await settleBillingOrder(session, "checkout_async_succeeded");
           }
           break;
         }
@@ -726,6 +860,16 @@ serve(async (req) => {
               correlation_id: corr, stripe_event_id: event.id,
               payload: { session_id: session.id, reason: event.type },
             });
+          }
+
+          if (session.metadata?.kind === "billing_order" && session.metadata?.orderId) {
+            const { error: orderFailError } = await supabase.rpc("fail_billing_order", {
+              _order_id: session.metadata.orderId,
+              _stripe_session_id: session.id,
+            });
+            if (orderFailError) {
+              throw new Error("Billing order failure sync failed: " + orderFailError.message);
+            }
           }
           break;
         }

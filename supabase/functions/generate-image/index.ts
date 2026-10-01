@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
+import { BILLING_PLAN_LIMITS, billingPlanFor } from "../_shared/billing-plans.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +17,29 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  let visualReservation: {
+    // Schema-untyped service client; keeping this local handle as any avoids
+    // Deno collapsing rpc() args to never/undefined on generic ReturnType.
+    // deno-lint-ignore no-explicit-any
+    client: any;
+    userId: string;
+    month: string;
+    units: number;
+  } | null = null;
+
+  const refundVisualReservation = async () => {
+    if (!visualReservation) return;
+    const reservation = visualReservation;
+    visualReservation = null;
+    const { error } = await reservation.client.rpc("release_billing_usage", {
+      _user_id: reservation.userId,
+      _month: reservation.month,
+      _metric: "visual_credits",
+      _units: reservation.units,
+    });
+    if (error) logStep("Visual reservation refund failed", { message: error.message });
+  };
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -49,19 +73,20 @@ serve(async (req) => {
 
     logStep("Authenticated user", { userId: user.id.slice(0, 8) + "..." });
 
-    // Get user's subscription plan from subscriptions table (source of truth)
+    // Get user's subscription plan from subscriptions table (source of truth).
     const { data: subscription } = await supabase
       .from("subscriptions")
       .select("tier, status")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    const userPlan = (subscription?.status === 'active' && subscription?.tier) ? subscription.tier : "free";
+    const userPlan = billingPlanFor(
+      (subscription?.status === "active" || subscription?.status === "trialing")
+        ? subscription.tier
+        : "free",
+    );
     const isPremiumPlan = userPlan === "premium" || userPlan === "prophet_tier";
-
-    // Check AI image quota (Free: 0, Student: 20, Premium: 100, Institutional: unlimited)
-    const imageQuotas: Record<string, number> = { free: 0, student: 20, premium: 100, prophet_tier: -1 };
-    const quota = imageQuotas[userPlan] ?? 0;
+    const quota = BILLING_PLAN_LIMITS[userPlan].visualCreditsPerMonth;
 
     if (quota === 0) {
       const denial = gateDenied("FEATURE_NOT_IN_PLAN", {
@@ -80,32 +105,58 @@ serve(async (req) => {
       return gateResponse(denial, corsHeaders);
     }
 
-    if (quota > 0) {
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const { count } = await supabase
-        .from("ai_usage_tracking")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("feature", "image_gen")
-        .eq("month", currentMonth);
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const { data: reservationData, error: reservationError } = await supabase.rpc(
+      "reserve_billing_usage",
+      {
+        _user_id: user.id,
+        _month: currentMonth,
+        _metric: "visual_credits",
+        _units: 1,
+        _base_limit: quota,
+      },
+    );
 
-      if ((count ?? 0) >= quota) {
-        const denial = gateDenied("MONTHLY_LIMIT_REACHED", {
-          message: `Monthly AI image limit reached (${quota}). Upgrade for more.`,
-          currentPlan: userPlan,
-          usage: { aiRequestsUsed: count ?? 0, aiRequestsLimit: quota },
-        });
-        await recordGateEvent(supabase, {
-          user_id: user.id,
-          feature: "image_gen",
-          reason: denial.reason,
-          allowed: false,
-          plan: userPlan,
-          usage_snapshot: denial.usage as Record<string, unknown>,
-        });
-        return gateResponse(denial, corsHeaders);
-      }
+    if (reservationError) {
+      logStep("Visual quota reservation failed", { message: reservationError.message });
+      return new Response(JSON.stringify({
+        error: "Unable to verify visual usage right now. Please try again.",
+        code: "VISUAL_METER_UNAVAILABLE",
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+
+    const visualUsage = (Array.isArray(reservationData) ? reservationData[0] : reservationData) as
+      { allowed: boolean; used: number; remaining: number; effective_limit: number } | null;
+
+    if (!visualUsage?.allowed) {
+      const denial = gateDenied("MONTHLY_LIMIT_REACHED", {
+        message: `Monthly visual credit limit reached (${visualUsage?.effective_limit ?? quota}). Add credits or upgrade.`,
+        currentPlan: userPlan,
+        usage: {
+          aiRequestsUsed: visualUsage?.used ?? quota,
+          aiRequestsLimit: visualUsage?.effective_limit ?? quota,
+        },
+      });
+      await recordGateEvent(supabase, {
+        user_id: user.id,
+        feature: "image_gen",
+        reason: denial.reason,
+        allowed: false,
+        plan: userPlan,
+        usage_snapshot: denial.usage as Record<string, unknown>,
+      });
+      return gateResponse(denial, corsHeaders);
+    }
+
+    visualReservation = {
+      client: supabase,
+      userId: user.id,
+      month: currentMonth,
+      units: 1,
+    };
 
     const { 
       prompt, 
@@ -265,12 +316,14 @@ Quality: Clean and readable. Only generate if the image adds educational value.`
       logStep("AI gateway error", { status: response.status });
       
       if (response.status === 429) {
+        await refundVisualReservation();
         return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (response.status === 402) {
+        await refundVisualReservation();
         return new Response(JSON.stringify({ error: "Payment required, please add funds." }), {
           status: 402,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -288,6 +341,8 @@ Quality: Clean and readable. Only generate if the image adds educational value.`
     }
 
     logStep("Image generated successfully");
+    // Successful provider generation consumes the reserved visual credit.
+    visualReservation = null;
 
     // Track usage (fire-and-forget)
     supabase.from("ai_usage_tracking").insert({
@@ -315,6 +370,7 @@ Quality: Clean and readable. Only generate if the image adds educational value.`
     );
 
   } catch (error) {
+    await refundVisualReservation();
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
     return new Response(

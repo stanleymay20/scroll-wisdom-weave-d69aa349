@@ -82,9 +82,9 @@ async function stripe(method, path, params) {
 // ---------------------------------------------------------------------------
 
 const CATALOGUE_TIERS = {
-  student: { name: "ScrollLibrary CI Student", amount: 500 },
-  premium: { name: "ScrollLibrary CI Premium", amount: 1500 },
-  prophet_tier: { name: "ScrollLibrary CI Institutional", amount: 4900 },
+  student: { name: "ScrollLibrary CI Creator", amount: 1900 },
+  premium: { name: "ScrollLibrary CI Pro", amount: 6900 },
+  prophet_tier: { name: "ScrollLibrary CI Teams", amount: 19900 },
   creator: { name: "ScrollLibrary CI Creator", amount: 900 },
   creator_pro: { name: "ScrollLibrary CI Creator Pro", amount: 2900 },
 };
