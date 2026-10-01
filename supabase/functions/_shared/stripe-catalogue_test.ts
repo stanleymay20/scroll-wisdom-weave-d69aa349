@@ -7,6 +7,8 @@ import {
   isPublicCheckoutTier,
   parseCatalogueOverride,
   planTierForProduct,
+  publicCheckoutPrice,
+  expectedPublicPlanAmountCents,
   resolveStripeCatalogue,
 } from "./stripe-catalogue.ts";
 
@@ -100,20 +102,41 @@ Deno.test("plan and creator products are kept in separate authority domains", ()
   assertEquals(planTierForProduct(LIVE_CATALOGUE, "prod_unknown"), null);
 });
 
-Deno.test("a client price must name the tier it claims", () => {
-  for (const tier of BILLABLE_TIERS) {
-    assert(clientPriceMatchesTier(LIVE_CATALOGUE, tier, LIVE_CATALOGUE.prices[tier]));
+Deno.test("legacy plan prices are reconciliation-only, not valid new-checkout descriptors", () => {
+  for (const tier of ["student", "premium", "prophet_tier"] as const) {
+    assertEquals(clientPriceMatchesTier(LIVE_CATALOGUE, tier, LIVE_CATALOGUE.prices[tier]), false);
     assert(clientPriceMatchesTier(LIVE_CATALOGUE, tier, undefined));
   }
-  // Cheaper tier's price under a dearer tier's name.
-  assertEquals(clientPriceMatchesTier(LIVE_CATALOGUE, "premium", LIVE_CATALOGUE.prices.student), false);
-  assertEquals(clientPriceMatchesTier(LIVE_CATALOGUE, "premium", "price_attacker"), false);
+  // Legacy publisher subscriptions remain reconcilable.
+  assert(clientPriceMatchesTier(LIVE_CATALOGUE, "creator", LIVE_CATALOGUE.prices.creator));
+  assert(clientPriceMatchesTier(LIVE_CATALOGUE, "creator_pro", LIVE_CATALOGUE.prices.creator_pro));
 });
 
-Deno.test("under a test override the live client still names its tier, and only its tier", () => {
+Deno.test("test override accepts only the test catalogue price for its tier", () => {
   const test = parseCatalogueOverride(TEST_OVERRIDE);
-  assert(clientPriceMatchesTier(test, "premium", LIVE_CATALOGUE.prices.premium));
+  assertEquals(clientPriceMatchesTier(test, "premium", LIVE_CATALOGUE.prices.premium), false);
   assert(clientPriceMatchesTier(test, "premium", "price_test_premium"));
-  assertEquals(clientPriceMatchesTier(test, "premium", LIVE_CATALOGUE.prices.student), false);
   assertEquals(clientPriceMatchesTier(test, "premium", "price_test_student"), false);
+});
+
+Deno.test("production public checkout requires both new product and price configuration", () => {
+  const base = {
+    STRIPE_PRODUCT_PRO: "prod_new_pro",
+    STRIPE_PRICE_PRO_MONTHLY: "price_new_pro_month",
+    STRIPE_PRICE_PRO_ANNUAL: "price_new_pro_year",
+  };
+  assertEquals(publicCheckoutPrice(LIVE_CATALOGUE, "premium", "monthly", env(base)), "price_new_pro_month");
+  assertEquals(publicCheckoutPrice(LIVE_CATALOGUE, "premium", "annual", env(base)), "price_new_pro_year");
+  assertEquals(publicCheckoutPrice(LIVE_CATALOGUE, "premium", "monthly", env({
+    STRIPE_PRICE_PRO_MONTHLY: "price_new_pro_month",
+  })), null);
+});
+
+Deno.test("expected public plan amounts pin the economic catalogue", () => {
+  assertEquals(expectedPublicPlanAmountCents("student", "monthly"), 1900);
+  assertEquals(expectedPublicPlanAmountCents("student", "annual"), 19000);
+  assertEquals(expectedPublicPlanAmountCents("premium", "monthly"), 6900);
+  assertEquals(expectedPublicPlanAmountCents("premium", "annual"), 69000);
+  assertEquals(expectedPublicPlanAmountCents("prophet_tier", "monthly"), 19900);
+  assertEquals(expectedPublicPlanAmountCents("prophet_tier", "annual"), 199000);
 });
