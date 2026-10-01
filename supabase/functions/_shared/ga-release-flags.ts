@@ -94,3 +94,17 @@ export function qualificationBookTypeEnabled(
     .map((item) => item.trim().toLowerCase())
     .some((item) => item === normalized);
 }
+
+
+/**
+ * Separate gate for selling ScrollLibrary Press publishing services. A paid
+ * service order is not an ISBN mint, but we still fail closed until the
+ * publishing-service operational workflow is ready to accept orders.
+ */
+export function publishingServiceBillingEnabled(value?: string | null): boolean {
+  const normalized = String(
+    value === undefined ? Deno.env.get("GA_PUBLISHING_SERVICES_BILLING_ENABLED") ?? "" : value ?? "",
+  ).trim().toLowerCase();
+
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
