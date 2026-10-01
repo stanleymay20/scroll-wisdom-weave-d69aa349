@@ -71,7 +71,7 @@ AS $$
       AND _entry.available_at IS NOT NULL
       AND _entry.available_at <= now()
       AND _entry.hold_reason IS NULL
-      AND COALESCE(jsonb_array_length(_entry.fraud_flags), 0) = 0
+      AND _entry.fraud_flags = '[]'::jsonb
       AND COALESCE(_entry.chargeback_status, '') NOT IN ('disputed','chargeback_pending')
     WHEN _entry.creator_net_cents < 0 THEN
       _entry.entry_type IN ('refund','chargeback','adjustment')
