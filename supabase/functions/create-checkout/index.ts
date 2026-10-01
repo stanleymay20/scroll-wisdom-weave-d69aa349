@@ -4,9 +4,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { ensureBillingCustomer } from "../_shared/billing-customer.ts";
 import { externalPaymentWritesEnabled } from "../_shared/ga-release-flags.ts";
 import {
-  clientPriceMatchesTier,
+  expectedPublicPlanAmountCents,
+  isBillingInterval,
   isPublicCheckoutTier,
   planTierForProduct,
+  publicCheckoutPrice,
   resolveStripeCatalogue,
 } from "../_shared/stripe-catalogue.ts";
 import { subscriptionStatusBlocksNewCheckout } from "../_shared/stripe-fields.ts";
@@ -17,20 +19,13 @@ const corsHeaders = {
 };
 
 const logStep = (step: string, details?: Record<string, unknown>) => {
-  const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
+  const detailsStr = details ? ` - ${JSON.stringify(details)}` : "";
   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
 };
 
-// The server, not the browser, is the authority for which Stripe price belongs
-// to each entitlement tier. The catalogue lives in _shared/stripe-catalogue.ts.
-
 const getReturnOrigin = (req: Request): string => {
-  // scrolllibrary.org is the site. This used to default to, and only allow,
-  // scrolllibrary.app — so unless APP_URL was set, a subscriber who paid on
-  // .org was sent back to a different domain.
   const configured = (Deno.env.get("APP_URL") || "https://scrolllibrary.org").replace(/\/+$/, "");
   const requestOrigin = req.headers.get("origin")?.replace(/\/+$/, "");
-
   const allowed = new Set([
     configured,
     "https://scrolllibrary.org",
@@ -41,15 +36,14 @@ const getReturnOrigin = (req: Request): string => {
     "http://localhost:8080",
     "http://127.0.0.1:8080",
   ]);
-
   return requestOrigin && allowed.has(requestOrigin) ? requestOrigin : configured;
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  // Keep live financial writes fail-closed until the exact-head Stripe lifecycle
+  // for the new catalogue passes. Defining the catalogue must not open checkout.
   if (!externalPaymentWritesEnabled()) {
     return new Response(JSON.stringify({
       error: "Paid upgrades are temporarily unavailable while payment validation is completing.",
@@ -63,7 +57,6 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-
   const supabaseClient = createClient(supabaseUrl, anonKey);
   const serviceClient = createClient(
     supabaseUrl,
@@ -72,9 +65,10 @@ serve(async (req) => {
   );
 
   try {
-    logStep("Function started");
+    const body = await req.json();
+    const tier = body?.tier;
+    const billingInterval = body?.billingInterval ?? "monthly";
 
-    const { priceId: requestedPriceId, tier } = await req.json();
     if (!isPublicCheckoutTier(tier)) {
       return new Response(JSON.stringify({
         error: "This subscription is not available for new checkout.",
@@ -84,19 +78,28 @@ serve(async (req) => {
         status: 400,
       });
     }
-
-    const catalogue = resolveStripeCatalogue();
-    const priceId = catalogue.prices[tier];
-    // Older clients still send priceId. It is never charged; a mismatch is
-    // rejected rather than trusted.
-    if (!clientPriceMatchesTier(catalogue, tier, requestedPriceId)) {
-      logStep("Rejected price/tier mismatch", { tier });
-      return new Response(JSON.stringify({ error: "Invalid price for subscription tier" }), {
+    if (!isBillingInterval(billingInterval)) {
+      return new Response(JSON.stringify({
+        error: "Invalid billing interval.",
+        code: "invalid_billing_interval",
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       });
     }
-    logStep("Request validated", { tier });
+
+    const catalogue = resolveStripeCatalogue();
+    const priceId = publicCheckoutPrice(catalogue, tier, billingInterval);
+    if (!priceId) {
+      logStep("New catalogue not provisioned", { tier, billingInterval });
+      return new Response(JSON.stringify({
+        error: "This plan is not provisioned for checkout yet.",
+        code: "billing_catalogue_not_provisioned",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+        status: 503,
+      });
+    }
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey || !supabaseUrl || !anonKey || !serviceRoleKey) {
@@ -120,9 +123,43 @@ serve(async (req) => {
         status: 401,
       });
     }
-    logStep("User authenticated", { userId: user.id });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+
+    // Configuration is not trusted merely because it looks like a price ID.
+    // Resolve the object and prove product, amount, currency and interval before
+    // a Checkout Session can ever be created.
+    const stripePrice = await stripe.prices.retrieve(priceId);
+    const priceProductId = typeof stripePrice.product === "string"
+      ? stripePrice.product
+      : stripePrice.product?.id ?? "";
+    const expectedInterval = billingInterval === "annual" ? "year" : "month";
+    const expectedAmount = expectedPublicPlanAmountCents(tier, billingInterval);
+    const configuredTier = planTierForProduct(catalogue, priceProductId);
+
+    if (!stripePrice.active
+        || stripePrice.type !== "recurring"
+        || stripePrice.unit_amount !== expectedAmount
+        || String(stripePrice.currency).toLowerCase() !== "usd"
+        || stripePrice.recurring?.interval !== expectedInterval
+        || stripePrice.recurring?.interval_count !== 1
+        || configuredTier !== tier) {
+      logStep("Stripe catalogue verification failed", {
+        tier,
+        billingInterval,
+        priceId,
+        priceProductId,
+        configuredTier,
+      });
+      return new Response(JSON.stringify({
+        error: "Billing catalogue verification failed.",
+        code: "billing_catalogue_mismatch",
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+      });
+    }
+
     const customerId = await ensureBillingCustomer(
       serviceClient,
       stripe,
@@ -130,10 +167,9 @@ serve(async (req) => {
       "subscription_checkout",
     );
 
-    // One user may hold at most one live generation-plan subscription.
-    // Legacy publishing subscriptions are a separate reconciliation domain and
-    // do not block this check. This prevents repeat clicks or tier changes from
-    // silently creating a second recurring charge.
+    // One account may hold at most one active generation-plan subscription.
+    // Historical publisher-tier subscriptions remain a separate reconciliation
+    // domain and do not authorize creation of duplicate public plan charges.
     const subscriptions = await stripe.subscriptions.list({
       customer: customerId,
       status: "all",
@@ -151,8 +187,8 @@ serve(async (req) => {
       const sameTier = existingTier === tier;
       return new Response(JSON.stringify({
         error: sameTier
-          ? "You already have this ScrollLibrary plan. Manage the existing subscription instead of starting another."
-          : "You already have a ScrollLibrary plan. Manage or cancel it before starting a different plan.",
+          ? "You already have this ScrollLibrary plan. Manage the existing subscription instead."
+          : "You already have a ScrollLibrary plan. Use billing management to change it.",
         code: sameTier ? "existing_plan_subscription" : "plan_change_required",
         existing_tier: existingTier,
         requested_tier: tier,
@@ -162,8 +198,6 @@ serve(async (req) => {
       });
     }
 
-    // Reuse an unfinished Checkout Session for the same customer and tier.
-    // This closes the double-click / retry window before a subscription exists.
     const openSessions = await stripe.checkout.sessions.list({
       customer: customerId,
       status: "open",
@@ -176,21 +210,21 @@ serve(async (req) => {
     );
     const reusableSession = publicOpenSessions.find((candidate: Stripe.Checkout.Session) =>
       candidate.metadata?.tier === tier
+      && candidate.metadata?.billingInterval === billingInterval
       && typeof candidate.url === "string"
       && candidate.url.length > 0
     );
     if (reusableSession?.url) {
-      logStep("Reusing open checkout session", { sessionId: reusableSession.id, tier });
       return new Response(JSON.stringify({ url: reusableSession.url, reused: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
         status: 200,
       });
     }
 
-    const otherOpenPlan = publicOpenSessions[0];
-    if (otherOpenPlan) {
+    if (publicOpenSessions.length > 0) {
+      const otherOpenPlan = publicOpenSessions[0];
       return new Response(JSON.stringify({
-        error: "Another ScrollLibrary plan checkout is already in progress. Finish or let that checkout expire before choosing a different plan.",
+        error: "Another ScrollLibrary plan checkout is already in progress.",
         code: "checkout_in_progress",
         existing_tier: otherOpenPlan.metadata?.tier ?? null,
         requested_tier: tier,
@@ -201,40 +235,35 @@ serve(async (req) => {
     }
 
     const origin = getReturnOrigin(req);
+    const metadata = {
+      userId: user.id,
+      tier,
+      billingInterval,
+      catalogueVersion: "economic-v1",
+    };
+
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
+      line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
       client_reference_id: user.id,
-      subscription_data: {
-        metadata: {
-          userId: user.id,
-          tier,
-        },
-      },
+      subscription_data: { metadata },
       success_url: `${origin}/pricing?success=true`,
       cancel_url: `${origin}/pricing?canceled=true`,
-      metadata: {
-        userId: user.id,
-        tier,
-      },
+      metadata,
     });
 
     if (!session.url) throw new Error("Stripe did not return a checkout URL");
-    logStep("Checkout session created", { sessionId: session.id, tier });
+    logStep("Checkout session created", { sessionId: session.id, tier, billingInterval });
 
     return new Response(JSON.stringify({ url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logStep("ERROR in create-checkout", { message: errorMessage });
+    logStep("ERROR in create-checkout", {
+      message: error instanceof Error ? error.message : String(error),
+    });
     return new Response(JSON.stringify({ error: "Unable to create checkout session" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
