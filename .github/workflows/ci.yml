@@ -138,6 +138,8 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-lovable-atomic-publication-mint.sql
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-governance-db-security.sql
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-independent-review.sql
+      - name: Assert economic billing usage and order authority
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-economic-billing-db-security.sql
       - name: Assert atomic book-generation quota reservation contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-book-generation-quota-db-security.sql
       - name: Assert expired workers and stale revisions cannot overwrite chapters
@@ -190,6 +192,7 @@ jobs:
       - name: Type-check critical financial Edge Functions
         run: |
           deno check supabase/functions/create-checkout/index.ts
+          deno check supabase/functions/create-billing-order-checkout/index.ts
           deno check supabase/functions/customer-portal/index.ts
           deno check supabase/functions/check-subscription/index.ts
           deno check supabase/functions/stripe-webhook/index.ts
@@ -301,6 +304,7 @@ jobs:
       - name: Test Stripe catalogue and API-shape compatibility
         run: |
           deno test supabase/functions/_shared/stripe-catalogue_test.ts
+          deno test supabase/functions/_shared/billing-order-catalogue_test.ts
           deno test supabase/functions/_shared/stripe-fields_test.ts
       - name: Test export renderers and export integrity
         run: |
