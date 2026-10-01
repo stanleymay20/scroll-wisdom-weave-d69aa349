@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { BILLING_PLAN_LIMITS, billingPlanFor } from "../_shared/billing-plans.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -172,6 +173,26 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let visualReservation: {
+    client: ReturnType<typeof createClient>;
+    userId: string;
+    month: string;
+    units: number;
+  } | null = null;
+
+  const refundVisualReservation = async () => {
+    if (!visualReservation) return;
+    const reservation = visualReservation;
+    visualReservation = null;
+    const { error } = await reservation.client.rpc("release_billing_usage", {
+      _user_id: reservation.userId,
+      _month: reservation.month,
+      _metric: "visual_credits",
+      _units: reservation.units,
+    });
+    if (error) console.error("[GENERATE-COVER] Visual credit refund failed:", error);
+  };
+
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -247,6 +268,69 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
+
+    const { data: subscription } = await supabase
+      .from("subscriptions")
+      .select("tier,status")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const userPlan = billingPlanFor(
+      (subscription?.status === "active" || subscription?.status === "trialing")
+        ? subscription.tier
+        : "free",
+    );
+    const visualLimit = BILLING_PLAN_LIMITS[userPlan].visualCreditsPerMonth;
+    if (visualLimit <= 0) {
+      return new Response(JSON.stringify({
+        error: "AI cover generation requires a paid plan.",
+        code: "FEATURE_NOT_IN_PLAN",
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Premium cover rendering consumes two visual credits.
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const coverVisualCredits = 2;
+    const { data: reservationData, error: reservationError } = await supabase.rpc(
+      "reserve_billing_usage",
+      {
+        _user_id: user.id,
+        _month: currentMonth,
+        _metric: "visual_credits",
+        _units: coverVisualCredits,
+        _base_limit: visualLimit,
+      },
+    );
+    if (reservationError) {
+      return new Response(JSON.stringify({
+        error: "Unable to verify visual credits right now.",
+        code: "VISUAL_METER_UNAVAILABLE",
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const visualUsage = (Array.isArray(reservationData) ? reservationData[0] : reservationData) as
+      { allowed: boolean; used: number; remaining: number; effective_limit: number } | null;
+    if (!visualUsage?.allowed) {
+      return new Response(JSON.stringify({
+        error: "Not enough visual credits to generate a premium cover.",
+        code: "VISUAL_CREDITS_EXHAUSTED",
+        usage: visualUsage,
+      }), {
+        status: 402,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    visualReservation = {
+      client: supabase,
+      userId: user.id,
+      month: currentMonth,
+      units: coverVisualCredits,
+    };
 
     // ===========================================
     // COMIC COVER CONSISTENCY CONTRACT
@@ -400,12 +484,14 @@ DESIGN REQUIREMENTS:
               await new Promise(resolve => setTimeout(resolve, attempt * 2000));
               continue;
             }
+            await refundVisualReservation();
             return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
               status: 429,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
           }
           if (response.status === 402) {
+            await refundVisualReservation();
             return new Response(JSON.stringify({
               error: "PAYMENT_REQUIRED",
               code: "AI_QUOTA_EXHAUSTED",
@@ -463,6 +549,7 @@ DESIGN REQUIREMENTS:
 
     if (!imageUrl) {
       console.error(`[GENERATE-COVER] All ${maxRetries} attempts failed: ${lastError}`);
+      await refundVisualReservation();
       return new Response(JSON.stringify({ 
         error: "Failed to generate cover image after multiple attempts. Please try again.",
         details: lastError
@@ -486,6 +573,7 @@ DESIGN REQUIREMENTS:
     }
 
     console.log("[GENERATE-COVER] Cover saved successfully");
+    visualReservation = null;
 
     return new Response(
       JSON.stringify({
@@ -499,6 +587,7 @@ DESIGN REQUIREMENTS:
       }
     );
   } catch (error) {
+    await refundVisualReservation();
     console.error("[GENERATE-COVER] Error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
