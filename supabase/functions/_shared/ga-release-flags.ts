@@ -108,3 +108,11 @@ export function publishingServiceBillingEnabled(value?: string | null): boolean 
 
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
+
+
+/** Paid third-party storefront purchases stay closed until creator payout settlement is GA-ready. */
+export function marketplacePaymentsEnabled(value?: string | null): boolean {
+  return normalizeFlag(
+    value === undefined ? Deno.env.get("GA_MARKETPLACE_PAYMENTS_ENABLED") ?? "" : value ?? "",
+  );
+}
