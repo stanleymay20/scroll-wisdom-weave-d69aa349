@@ -313,7 +313,11 @@ export default function Pricing() {
                           className="w-full"
                           size="sm"
                           onClick={() => manageExisting ? handleManageSubscription() : handleSelectPlan(plan.tierKey)}
-                          disabled={isCurrent || !!checkoutLoading || (manageExisting ? portalLoading : false)}
+                          disabled={
+                            isCurrent
+                            || !!checkoutLoading
+                            || (manageExisting ? portalLoading : (isPaidChoice && !FEATURES.enableSubscriptionCheckout))
+                          }
                         >
                           {checkoutLoading === plan.tierKey ? (
                             <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing…</>
