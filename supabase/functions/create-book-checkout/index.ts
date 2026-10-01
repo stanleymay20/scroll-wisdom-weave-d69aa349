@@ -328,11 +328,18 @@ serve(async (req) => {
       tax_id_collection: { enabled: true, required: "never" },
       billing_address_collection: "auto",
       customer_update: { address: "auto", name: "auto" },
+      consent_collection: { terms_of_service: "required" },
+      custom_text: {
+        terms_of_service_acceptance: {
+          message: "By checking this box, you agree to the ScrollLibrary Terms, request immediate performance of the digital service, and acknowledge that once digital content or paid processing is supplied, any statutory withdrawal right may be lost to the extent permitted by applicable law.",
+        },
+      },
       success_url: `${origin}/store/${listing.slug}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/store/${listing.slug}?canceled=1`,
       metadata: {
         kind: "book_purchase",
         checkout_version: "enterprise_v1",
+        commercialConsentVersion: "eu-digital-v1",
         listing_id: listing.id,
         book_id: book.id,
         seller_user_id: book.user_id,
