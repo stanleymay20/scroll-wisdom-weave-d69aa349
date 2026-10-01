@@ -125,6 +125,20 @@ for (const [source, label] of [
 requireText(webhook, "session.amount_subtotal", "tax-aware fulfillment compares pre-tax subtotal");
 requireText(webhook, "preTaxRefundAmount", "tax-inclusive refunds are mapped back to pre-tax ledger amounts");
 
+// Every new paid economic-v1 checkout must capture explicit Terms consent and
+// fulfillment must fail closed if the versioned consent evidence is absent.
+for (const [source, label] of [
+  [checkout, "subscription checkout"],
+  [orderCheckout, "one-time checkout"],
+  [bookCheckout, "storefront book checkout"],
+]) {
+  requireText(source, 'consent_collection: { terms_of_service: "required" }', label + " required terms consent");
+  requireText(source, 'commercialConsentVersion: "eu-digital-v1"', label + " versioned consent marker");
+  requireText(source, "terms_of_service_acceptance", label + " digital-performance consent text");
+}
+requireText(webhook, 'session.metadata?.commercialConsentVersion !== "eu-digital-v1"', "historical sessions are not retroactively reclassified");
+requireText(webhook, 'session.consent?.terms_of_service !== "accepted"', "versioned checkout fulfillment verifies Stripe consent");
+
 // Compute must be metered on server-owned, race-safe reservations.
 requireText(migration, "CREATE TABLE IF NOT EXISTS public.billing_usage_monthly", "monthly usage authority");
 requireText(migration, "pg_advisory_xact_lock", "atomic usage locking");
