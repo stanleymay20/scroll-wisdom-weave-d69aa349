@@ -1567,7 +1567,7 @@ test("post-checkout success only claims activation after server confirmation", a
   await page.goto("/pricing?success=true");
 
   await expect(page.getByText("Subscription activated!", { exact: true })).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText("Welcome! Your features are now unlocked.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Your verified plan entitlements are now active.", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/pricing$/, { timeout: 10_000 });
 });
 
@@ -1603,7 +1603,7 @@ test("GA launch removes deferred direct routes and payment CTAs", async ({ page 
   }
 
   await page.goto("/pricing");
-  const deferredPaymentButtons = page.getByRole("button", { name: "Available after payment validation" });
+  const deferredPaymentButtons = page.getByRole("button", { name: /^(?:Checkout opens|Available) after validation$/ });
   await expect(deferredPaymentButtons.first()).toBeVisible({ timeout: 10_000 });
   expect(await deferredPaymentButtons.count()).toBeGreaterThan(0);
   for (let i = 0; i < await deferredPaymentButtons.count(); i += 1) {
