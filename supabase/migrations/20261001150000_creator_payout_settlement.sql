@@ -146,6 +146,97 @@ REVOKE ALL ON FUNCTION public.get_creator_payout_balance(uuid)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_creator_payout_balance(uuid) TO service_role;
 
+-- Return only creator/currency pairs that require settlement work. Active
+-- reservations are included even when payable_cents is zero so an ambiguous
+-- Stripe response or failed DB acknowledgement is always retried with the
+-- original reservation/idempotency key. This avoids profile-page starvation.
+CREATE OR REPLACE FUNCTION public.list_creator_payout_candidates(
+  _minimum_cents integer DEFAULT 100,
+  _limit integer DEFAULT 25
+)
+RETURNS TABLE (
+  creator_user_id uuid,
+  currency text,
+  payable_cents bigint,
+  reserved_cents bigint
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $
+  WITH verified AS (
+    SELECT p.user_id
+    FROM public.creator_payout_profiles p
+    WHERE p.payout_method = 'stripe_connect'
+      AND p.stripe_connect_status = 'verified'
+      AND p.stripe_connect_account_id IS NOT NULL
+      AND length(p.stripe_connect_account_id) > 0
+  ),
+  currencies AS (
+    SELECT DISTINCT l.creator_user_id, lower(l.currency) AS currency
+    FROM public.creator_earnings_ledger l
+    JOIN verified v ON v.user_id = l.creator_user_id
+    WHERE public.creator_payout_entry_is_eligible(l)
+    UNION
+    SELECT DISTINCT t.creator_user_id, lower(t.currency)
+    FROM public.creator_payout_transfers t
+    JOIN verified v ON v.user_id = t.creator_user_id
+    WHERE t.status = 'reserved'
+  ),
+  ledger_totals AS (
+    SELECT
+      l.creator_user_id,
+      lower(l.currency) AS currency,
+      COALESCE(SUM(l.creator_net_cents), 0)::bigint AS eligible_cents
+    FROM public.creator_earnings_ledger l
+    JOIN verified v ON v.user_id = l.creator_user_id
+    WHERE public.creator_payout_entry_is_eligible(l)
+    GROUP BY l.creator_user_id, lower(l.currency)
+  ),
+  transfer_totals AS (
+    SELECT
+      t.creator_user_id,
+      lower(t.currency) AS currency,
+      COALESCE(SUM(t.amount_cents) FILTER (WHERE t.status = 'reserved'), 0)::bigint AS reserved_cents,
+      COALESCE(SUM(t.amount_cents) FILTER (WHERE t.status = 'transferred'), 0)::bigint AS transferred_cents
+    FROM public.creator_payout_transfers t
+    JOIN verified v ON v.user_id = t.creator_user_id
+    WHERE t.status IN ('reserved','transferred')
+    GROUP BY t.creator_user_id, lower(t.currency)
+  ),
+  balances AS (
+    SELECT
+      c.creator_user_id,
+      c.currency,
+      GREATEST(
+        COALESCE(l.eligible_cents, 0)
+        - COALESCE(t.reserved_cents, 0)
+        - COALESCE(t.transferred_cents, 0),
+        0
+      )::bigint AS payable_cents,
+      COALESCE(t.reserved_cents, 0)::bigint AS reserved_cents
+    FROM currencies c
+    LEFT JOIN ledger_totals l
+      ON l.creator_user_id = c.creator_user_id AND l.currency = c.currency
+    LEFT JOIN transfer_totals t
+      ON t.creator_user_id = c.creator_user_id AND t.currency = c.currency
+  )
+  SELECT b.creator_user_id, b.currency, b.payable_cents, b.reserved_cents
+  FROM balances b
+  WHERE b.reserved_cents > 0 OR b.payable_cents >= GREATEST(COALESCE(_minimum_cents, 100), 1)
+  ORDER BY
+    CASE WHEN b.reserved_cents > 0 THEN 0 ELSE 1 END,
+    b.creator_user_id,
+    b.currency
+  LIMIT LEAST(GREATEST(COALESCE(_limit, 25), 1), 100);
+$;
+
+REVOKE ALL ON FUNCTION public.list_creator_payout_candidates(integer, integer)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.list_creator_payout_candidates(integer, integer)
+  TO service_role;
+
 CREATE OR REPLACE FUNCTION public.reserve_creator_payout(
   _creator_user_id uuid,
   _currency text,
