@@ -1960,23 +1960,21 @@ serve(async (req) => {
   
 
   let textReservation: {
-    client: ReturnType<typeof createClient>;
     userId: string;
     month: string;
     units: number;
+    release: (units: number) => Promise<void>;
   } | null = null;
 
   const refundTextReservation = async () => {
     if (!textReservation) return;
     const reservation = textReservation;
     textReservation = null;
-    const { error } = await reservation.client.rpc("release_billing_usage", {
-      _user_id: reservation.userId,
-      _month: reservation.month,
-      _metric: "ai_text_words",
-      _units: reservation.units,
-    });
-    if (error) console.error("[GENERATE-CHAPTER] Failed to refund AI text reservation:", error);
+    try {
+      await reservation.release(reservation.units);
+    } catch (error) {
+      console.error("[GENERATE-CHAPTER] Failed to refund AI text reservation:", error);
+    }
   };
 
   try {
@@ -4731,10 +4729,18 @@ BEGIN:`;
     }
 
     textReservation = {
-      client: supabase,
       userId: user.id,
       month: billingMonth,
       units: requestedTextWords,
+      release: async (units: number) => {
+        const { error } = await supabase.rpc("release_billing_usage", {
+          _user_id: user.id,
+          _month: billingMonth,
+          _metric: "ai_text_words",
+          _units: units,
+        });
+        if (error) throw error;
+      },
     };
 
     // Retry logic for transient gateway errors (502, 503, 504) and rate limits (429)
