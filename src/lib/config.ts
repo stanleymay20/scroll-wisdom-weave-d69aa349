@@ -35,16 +35,28 @@ function explicitClientFlag(value: string | undefined): boolean {
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
-// Specialized book generation is released independently from the broader post-GA
-// surface. This lets one empirically qualified mode open without implicitly
-// enabling payments, exports, study tooling, or other PMF-disabled features.
+// Full commercial GA is independent from specialized-generation qualification.
+// It opens the paid/publishing surface, while book types such as academic,
+// technical, illustrated, children, comic, fiction, etc. still require the
+// separate empirical provider-qualification allow-list below.
+export const COMMERCIAL_GA_ENABLED = explicitClientFlag(
+  import.meta.env.VITE_COMMERCIAL_GA_ENABLED,
+);
+
+// Creator marketplace money movement has an additional dependency: verified
+// seller payout settlement. Keep it independently fail-closed even when SaaS
+// subscriptions and ScrollLibrary Press commerce are live.
+export const MARKETPLACE_GA_ENABLED = explicitClientFlag(
+  import.meta.env.VITE_MARKETPLACE_GA_ENABLED,
+);
+
 export const SPECIALIZED_AUTHORING_ENABLED = explicitClientFlag(
   import.meta.env.VITE_SPECIALIZED_AUTHORING_ENABLED,
 );
 
 export const FEATURES = {
   enableTTS: true,
-  enableAICovers: !PMF_MODE,
+  enableAICovers: COMMERCIAL_GA_ENABLED,
   enableBatchGeneration: false,
   enableElevenLabsTTS: false,
   // PMF-disabled features
@@ -62,17 +74,19 @@ export const FEATURES = {
   enableChapterVideo: !PMF_MODE,
   enableKnowledgeGraph: !PMF_MODE,
   enableStudyMusic: !PMF_MODE,
-  // External financial writes stay closed until the exact-head Stripe sandbox
-  // lifecycle has passed and production is deliberately opened.
-  enablePaidCheckout: !PMF_MODE,
-  enableSubscriptionCheckout: !PMF_MODE,
-  enableStripeConnect: !PMF_MODE,
+  // Commercial GA is opened deliberately and independently from PMF-only
+  // experimental/study features. Backend financial/publication gates remain
+  // authoritative even when these browser surfaces are enabled.
+  enablePaidCheckout: COMMERCIAL_GA_ENABLED,
+  enableSubscriptionCheckout: COMMERCIAL_GA_ENABLED,
+  enableStripeConnect: MARKETPLACE_GA_ENABLED,
+  enableMarketplace: MARKETPLACE_GA_ENABLED,
   enableSpecializedAuthoring: SPECIALIZED_AUTHORING_ENABLED,
-  enableAdvancedAuthoring: !PMF_MODE,
-  enableChapterRegeneration: !PMF_MODE,
-  enableCustomCover: !PMF_MODE,
-  enableExports: !PMF_MODE,
-  enableEditorialPipeline: !PMF_MODE,
-  enableReleaseScheduling: !PMF_MODE,
-  enableCanonicalPublication: !PMF_MODE,
+  enableAdvancedAuthoring: COMMERCIAL_GA_ENABLED,
+  enableChapterRegeneration: COMMERCIAL_GA_ENABLED,
+  enableCustomCover: COMMERCIAL_GA_ENABLED,
+  enableExports: COMMERCIAL_GA_ENABLED,
+  enableEditorialPipeline: COMMERCIAL_GA_ENABLED,
+  enableReleaseScheduling: COMMERCIAL_GA_ENABLED,
+  enableCanonicalPublication: COMMERCIAL_GA_ENABLED,
 };

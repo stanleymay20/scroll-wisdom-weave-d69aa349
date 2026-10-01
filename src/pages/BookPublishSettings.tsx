@@ -291,7 +291,7 @@ export default function BookPublishSettings() {
         book_id: bookId,
         slug: form.slug || slugify(book.title),
         is_public: form.is_public,
-        price_cents: FEATURES.enablePaidCheckout ? (Number(form.price_cents) || 0) : 0,
+        price_cents: FEATURES.enableMarketplace ? (Number(form.price_cents) || 0) : 0,
         sample_chapters: Math.max(0, Number(form.sample_chapters) || 1),
         blurb: form.blurb || null,
         subtitle: form.subtitle || null,
@@ -535,7 +535,7 @@ export default function BookPublishSettings() {
           </p>
           <ol className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
             {[
-              { n: 1, label: FEATURES.enablePaidCheckout ? "Set price" : "Free access", ok: form.slug.length > 0, hint: FEATURES.enablePaidCheckout ? "Free or paid." : "GA listings are free while paid checkout is closed." },
+              { n: 1, label: FEATURES.enableMarketplace ? "Set price" : "Free access", ok: form.slug.length > 0, hint: FEATURES.enableMarketplace ? "Free or paid." : "GA listings are free while paid checkout is closed." },
               { n: 2, label: "Confirm cover", ok: !!(book?.cover_image_url || form.cover_override_url), hint: "Used everywhere your book appears." },
               { n: 3, label: "Make public", ok: form.is_public, hint: "Flips the switch above." },
             ].map((step) => (
@@ -550,7 +550,7 @@ export default function BookPublishSettings() {
               </li>
             ))}
           </ol>
-          {FEATURES.enablePaidCheckout && FEATURES.enableStripeConnect && (
+          {FEATURES.enableMarketplace && FEATURES.enableStripeConnect && (
           <div className="mt-4 flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate("/sell")} className="min-h-10">
               <Sparkles className="w-4 h-4 mr-2" /> Set up paid sales
@@ -582,12 +582,12 @@ export default function BookPublishSettings() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="pub-price">{FEATURES.enablePaidCheckout ? "Price (USD)" : "Price"}</Label>
+              <Label htmlFor="pub-price">{FEATURES.enableMarketplace ? "Price (USD)" : "Price"}</Label>
               <Input id="pub-price" type="number" inputMode="decimal" min={0} className="text-foreground caret-foreground"
-                value={FEATURES.enablePaidCheckout ? (form.price_cents / 100).toString() : "0"}
-                disabled={!FEATURES.enablePaidCheckout}
+                value={FEATURES.enableMarketplace ? (form.price_cents / 100).toString() : "0"}
+                disabled={!FEATURES.enableMarketplace}
                 onChange={(e) => setForm({ ...form, price_cents: Math.round(parseFloat(e.target.value || "0") * 100) })} />
-              {!FEATURES.enablePaidCheckout && (
+              {!FEATURES.enableMarketplace && (
                 <p className="mt-1 text-xs text-muted-foreground">Paid listings reopen after Stripe lifecycle validation.</p>
               )}
             </div>

@@ -41,8 +41,8 @@ rejectText(
 );
 requireText(
   webhook,
-  "Checkout amount authority mismatch",
-  "webhook amount authority check",
+  "Checkout subtotal authority mismatch",
+  "webhook pre-tax subtotal authority check",
 );
 requireText(
   webhook,
@@ -93,6 +93,16 @@ requireText(
   webhook,
   "Purchase replay reconciled",
   "paid/refunded replay reconciliation",
+);
+requireText(
+  webhook,
+  "preTaxRefundAmount",
+  "tax-aware refund subtotal allocation",
+);
+requireText(
+  checkout,
+  "automatic_tax: { enabled: true }",
+  "storefront automatic tax",
 );
 
 requireText(

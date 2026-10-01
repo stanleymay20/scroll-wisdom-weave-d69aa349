@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { ensureBillingCustomer } from "../_shared/billing-customer.ts";
-import { externalPaymentWritesEnabled } from "../_shared/ga-release-flags.ts";
+import { externalPaymentWritesEnabled, marketplacePaymentsEnabled } from "../_shared/ga-release-flags.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -267,6 +267,13 @@ serve(async (req) => {
         503,
       );
     }
+    if (!marketplacePaymentsEnabled()) {
+      return publicError(
+        "Paid marketplace purchases are temporarily unavailable while creator payout settlement is completing validation.",
+        "ga_marketplace_payments_disabled",
+        503,
+      );
+    }
     if (!stripeKey) {
       log("Paid checkout configuration missing", { correlationId, stripe: false });
       return publicError("Checkout is temporarily unavailable", "service_unavailable", 503);
@@ -317,6 +324,10 @@ serve(async (req) => {
           },
         },
       ],
+      automatic_tax: { enabled: true },
+      tax_id_collection: { enabled: true, required: "never" },
+      billing_address_collection: "auto",
+      customer_update: { address: "auto", name: "auto" },
       success_url: `${origin}/store/${listing.slug}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/store/${listing.slug}?canceled=1`,
       metadata: {

@@ -151,7 +151,7 @@ export default function PublicBookPage() {
       keywords: data.seo_keywords.length > 0 ? data.seo_keywords.join(", ") : undefined,
       dateModified: data.updated_at || undefined,
       mainEntityOfPage: canonicalUrl,
-      offers: FEATURES.enablePaidCheckout && data.price_cents > 0 ? {
+      offers: FEATURES.enableMarketplace && data.price_cents > 0 ? {
         "@type": "Offer",
         url: canonicalUrl,
         price: (data.price_cents / 100).toFixed(2),
@@ -180,7 +180,7 @@ export default function PublicBookPage() {
   ];
 
   async function handleBuy() {
-    if (data!.price_cents > 0 && !FEATURES.enablePaidCheckout) {
+    if (data!.price_cents > 0 && !FEATURES.enableMarketplace) {
       toast.info("Paid purchases reopen after the payment lifecycle passes GA validation.");
       return;
     }
@@ -281,7 +281,7 @@ export default function PublicBookPage() {
                 By <Link to={`/authors/${author.slug}`} className="text-primary hover:underline">{author.display_name}</Link>
               </p>
             )}
-            {data.price_cents > 0 && !FEATURES.enablePaidCheckout ? (
+            {data.price_cents > 0 && !FEATURES.enableMarketplace ? (
               <p className="mt-6 text-sm text-muted-foreground">
                 Paid sales open only after the payment lifecycle passes GA validation.
               </p>
@@ -296,11 +296,11 @@ export default function PublicBookPage() {
               <Button
                 variant="default"
                 onClick={handleBuy}
-                disabled={checkoutBusy || (data.price_cents > 0 && !FEATURES.enablePaidCheckout)}
+                disabled={checkoutBusy || (data.price_cents > 0 && !FEATURES.enableMarketplace)}
               >
                 {checkoutBusy
                   ? "Starting checkout…"
-                  : data.price_cents > 0 && !FEATURES.enablePaidCheckout
+                  : data.price_cents > 0 && !FEATURES.enableMarketplace
                     ? "Paid purchases after validation"
                     : data.price_cents > 0
                       ? `Buy for ${price}`

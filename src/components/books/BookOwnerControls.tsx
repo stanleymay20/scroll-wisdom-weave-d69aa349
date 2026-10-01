@@ -15,6 +15,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { FEATURES } from "@/lib/config";
+import { isBookTypeReleasedForClient } from "@/lib/bookTypeRelease";
 
 
 interface BookData {
@@ -198,8 +199,9 @@ export function BookOwnerControls({
       </div>
       )}
 
-      {/* Specialized book-type mutation is post-GA. */}
-      {FEATURES.enableAdvancedAuthoring && (
+      {/* Specialized book-type mutation is independently provider-qualified. */}
+      {(isBookTypeReleasedForClient("illustrated", FEATURES.enableSpecializedAuthoring)
+        || isBookTypeReleasedForClient("comic", FEATURES.enableSpecializedAuthoring)) && (
         <div className="p-4 rounded-xl bg-muted/30 border border-border/50 mt-4">
         <Label className="text-foreground font-medium">{t('book.bookType')}</Label>
         <p className="text-sm text-muted-foreground mt-1">{t('book.bookTypeDesc')}</p>
@@ -214,13 +216,23 @@ export function BookOwnerControls({
               <span className="text-sm font-medium">Text</span>
             </Label>
           </div>
-          <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-primary/50 transition-colors">
-            <RadioGroupItem value="illustrated" id={`bt-illustrated${idSuffix}`} />
-            <Label htmlFor={`bt-illustrated${idSuffix}`} className="cursor-pointer flex-1">
-              <span className="text-sm font-medium">{t('generate.illustrated')}</span>
-              <span className="block text-xs text-muted-foreground">{t('book.textIllustrations')}</span>
-            </Label>
-          </div>
+          {isBookTypeReleasedForClient("illustrated", FEATURES.enableSpecializedAuthoring) && (
+            <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-primary/50 transition-colors">
+              <RadioGroupItem value="illustrated" id={`bt-illustrated${idSuffix}`} />
+              <Label htmlFor={`bt-illustrated${idSuffix}`} className="cursor-pointer flex-1">
+                <span className="text-sm font-medium">{t('generate.illustrated')}</span>
+                <span className="block text-xs text-muted-foreground">{t('book.textIllustrations')}</span>
+              </Label>
+            </div>
+          )}
+          {isBookTypeReleasedForClient("comic", FEATURES.enableSpecializedAuthoring) && (
+            <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-primary/50 transition-colors">
+              <RadioGroupItem value="comic" id={`bt-comic${idSuffix}`} />
+              <Label htmlFor={`bt-comic${idSuffix}`} className="cursor-pointer flex-1">
+                <span className="text-sm font-medium">Comic</span>
+              </Label>
+            </div>
+          )}
         </RadioGroup>
       </div>
       )}

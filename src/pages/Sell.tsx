@@ -37,7 +37,7 @@ import {
   Users, TrendingUp, PartyPopper, Pencil, Store, ShoppingBag,
 } from "lucide-react";
 import { publishExternallyOneClick, waitForBundle } from "@/lib/oneClickPublish";
-import { PMF_MODE } from "@/lib/config";
+import { FEATURES } from "@/lib/config";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -74,7 +74,8 @@ const STEP_LABELS: Record<Step, string> = {
   3: "Publish",
   4: "Launch",
 };
-const ACTIVE_STEPS: Step[] = PMF_MODE ? [0, 1, 3, 4] : [0, 1, 2, 3, 4];
+const PAID_SALES_ENABLED = FEATURES.enableMarketplace;
+const ACTIVE_STEPS: Step[] = PAID_SALES_ENABLED ? [0, 1, 2, 3, 4] : [0, 1, 3, 4];
 const TOTAL_STEPS = ACTIVE_STEPS.length;
 const DRAFT_KEY = "sell_wizard_draft_v1";
 
@@ -234,12 +235,12 @@ export default function Sell() {
       // Old local drafts may still point at the payout step. Paid sales are not
       // part of PMF/GA, so resume at Profile or Publish instead of asking for
       // financial information that cannot be used yet.
-      if (PMF_MODE && next.step === 2) {
+      if (!PAID_SALES_ENABLED && next.step === 2) {
         next = { ...next, step: ap || next.profile.display_name.trim() ? 3 as Step : 1 as Step };
       }
 
       // Payout setup is loaded only when the paid-sales path is actually open.
-      if (!PMF_MODE) {
+      if (PAID_SALES_ENABLED) {
         let payout: any = null;
         try {
           const { data: pd } = await supabase.functions.invoke("creator-payout-profile", { method: "GET" });
@@ -308,7 +309,7 @@ export default function Sell() {
       setDraft((d) => ({ ...d, profile: { ...d.profile, slug: savedSlug } }));
       setHasAuthorProfile(true);
       toast.success("Profile saved");
-      setStep(PMF_MODE ? 3 : 2);
+      setStep(PAID_SALES_ENABLED ? 2 : 3);
     } catch (e: any) {
       toast.error(friendlyError(e, "Could not save profile"));
     } finally { setSavingStep(false); }
@@ -347,7 +348,7 @@ export default function Sell() {
     }
     const baseSlug = draft.publish.slug || slugify(books.find(b => b.id === draft.publish.book_id)?.title ?? "");
     if (!baseSlug) { toast.error("URL slug is required"); return; }
-    const priceCents = PMF_MODE ? 0 : Math.max(0, Math.floor(draft.publish.price_cents || 0));
+    const priceCents = PAID_SALES_ENABLED ? Math.max(0, Math.floor(draft.publish.price_cents || 0)) : 0;
     const isPaid = priceCents > 0;
 
     setSavingStep(true);
@@ -462,7 +463,7 @@ export default function Sell() {
             onBack={() => setStep(0)} onNext={saveProfileAndContinue} saving={savingStep}
           />
         )}
-        {!PMF_MODE && draft.step === 2 && (
+        {PAID_SALES_ENABLED && draft.step === 2 && (
           <StepPayout
             profile={payoutProfile} setProfile={setPayoutProfile}
             onBack={() => setStep(1)} onNext={savePayoutAndContinue} saving={savingStep}
@@ -472,8 +473,8 @@ export default function Sell() {
           <StepPublish
             books={books} value={draft.publish}
             onChange={(p) => setDraft((d) => ({ ...d, publish: p }))}
-            onBack={() => setStep(PMF_MODE ? 1 : 2)} onNext={publishAndContinue} saving={savingStep}
-            canPublishExternal={!PMF_MODE && entitlements.can_publish_external}
+            onBack={() => setStep(!PAID_SALES_ENABLED ? 1 : 2)} onNext={publishAndContinue} saving={savingStep}
+            canPublishExternal={PAID_SALES_ENABLED && entitlements.can_publish_external}
             entitlementTier={entitlements.tier} entitlementLoading={entLoading}
             editing={editingListing}
             loadError={booksLoadError}
@@ -485,13 +486,13 @@ export default function Sell() {
             slug={publishedListing.slug}
             bookId={draft.publish.book_id}
             listingId={publishedListing.id}
-            canPublishExternal={!PMF_MODE && entitlements.can_publish_external}
+            canPublishExternal={PAID_SALES_ENABLED && entitlements.can_publish_external}
             onReset={() => { localStorage.removeItem(DRAFT_KEY); setDraft(EMPTY_DRAFT); setPublishedListing(null); setStep(0); }}
           />
         )}
 
         {/* Education cards — keep the current GA boundary visible without adding another workflow. */}
-        {(draft.step === 0 || (!PMF_MODE && draft.step === 2)) && <EducationCards tier={entitlements.tier} />}
+        {(draft.step === 0 || (PAID_SALES_ENABLED && draft.step === 2)) && <EducationCards tier={entitlements.tier} />}
       </main>
     </div>
   );
@@ -507,18 +508,18 @@ function StepWelcome({ onStart, entitlementTier }: { onStart: () => void; entitl
       <Card className="p-6 md:p-8 bg-gradient-to-br from-primary/5 via-background to-background border-primary/20">
         <div className="flex items-center gap-2 text-xs font-medium text-primary mb-3">
           <Sparkles className="h-3.5 w-3.5" />
-          <span>{PMF_MODE ? "Publish on ScrollLibrary" : "Creator economy on ScrollLibrary"}</span>
+          <span>{!PAID_SALES_ENABLED ? "Publish on ScrollLibrary" : "Creator economy on ScrollLibrary"}</span>
         </div>
         <h1 className="text-3xl md:text-4xl font-display font-semibold tracking-tight">
-          {PMF_MODE ? "Put your book in front of readers." : "Turn your knowledge into income."}
+          {!PAID_SALES_ENABLED ? "Put your book in front of readers." : "Turn your knowledge into income."}
         </h1>
         <p className="mt-3 text-muted-foreground leading-relaxed">
-          {PMF_MODE
+          {!PAID_SALES_ENABLED
             ? "Create your author profile and publish a free public listing. Paid sales, payouts, release scheduling, and external distribution stay closed until their validation gates pass."
             : "Publish your books to a global storefront in minutes. Reach readers, build an audience, and get paid — without juggling tax forms, platforms, or marketing tools."}
         </p>
         <div className="grid grid-cols-2 gap-3 mt-6">
-          {(PMF_MODE ? [
+          {(!PAID_SALES_ENABLED ? [
             { icon: BookOpen, label: "Free public listing" },
             { icon: Users, label: "Author profile" },
             { icon: Globe, label: "Reader discovery" },
@@ -536,9 +537,9 @@ function StepWelcome({ onStart, entitlementTier }: { onStart: () => void; entitl
           ))}
         </div>
         <Button size="lg" className="w-full mt-6 min-h-12" onClick={onStart}>
-          {PMF_MODE ? "Continue to publish" : "Start Selling"} <ArrowRight className="h-4 w-4 ml-1" />
+          {!PAID_SALES_ENABLED ? "Continue to publish" : "Start Selling"} <ArrowRight className="h-4 w-4 ml-1" />
         </Button>
-        {!PMF_MODE && (
+        {PAID_SALES_ENABLED && (
           <div className="mt-3 flex justify-center">
             <a href="/sell/analytics" className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">
               View marketplace analytics →
@@ -736,7 +737,7 @@ function StepPublish({
         <p className="text-sm text-muted-foreground mt-1">
           {editing
             ? "Changes go live as soon as you save."
-            : PMF_MODE
+            : !PAID_SALES_ENABLED
               ? "Pick a book and publish it free during GA validation."
               : "Pick a book, add a price, and you're live."}
         </p>
@@ -768,14 +769,14 @@ function StepPublish({
             <div>
               <Label htmlFor="price">Price (USD)</Label>
               <Input id="price" inputMode="decimal" className="text-foreground caret-foreground mt-1.5"
-                value={PMF_MODE ? "0.00" : (value.price_cents / 100).toFixed(2)}
-                disabled={PMF_MODE}
+                value={!PAID_SALES_ENABLED ? "0.00" : (value.price_cents / 100).toFixed(2)}
+                disabled={!PAID_SALES_ENABLED}
                 onChange={(e) => {
                   const n = Number(e.target.value.replace(/[^0-9.]/g, "")) || 0;
                   onChange({ ...value, price_cents: Math.round(n * 100) });
                 }} />
               <p className="text-xs text-muted-foreground mt-1">
-                {PMF_MODE ? "ScrollLibrary listings are free while paid checkout is under validation." : "Set $0.00 to give it away."}
+                {!PAID_SALES_ENABLED ? "ScrollLibrary listings are free while paid checkout is under validation." : "Set $0.00 to give it away."}
               </p>
             </div>
             <div>
@@ -809,7 +810,7 @@ function StepPublish({
           </div>
 
           {/* Advanced publishing controls stay hidden during PMF validation. */}
-          {!PMF_MODE && (
+          {PAID_SALES_ENABLED && (
           <div>
             <button type="button"
               className="text-sm text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
@@ -840,7 +841,7 @@ function StepPublish({
           )}
 
           {/* Entitlement upsell */}
-          {!PMF_MODE && !entitlementLoading && !canPublishExternal && entitlementTier === "free" && (
+          {PAID_SALES_ENABLED && !entitlementLoading && !canPublishExternal && entitlementTier === "free" && (
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Lock className="h-4 w-4 text-primary" aria-hidden />
@@ -946,7 +947,7 @@ function StepLaunch({
       </Card>
 
       {/* Third-party publishing is deliberately absent from the GA UI until provider E2E passes. */}
-      {!PMF_MODE && (
+      {PAID_SALES_ENABLED && (
       <Card className="p-5 md:p-6">
         <div className="flex items-center gap-2">
           <Globe className="h-4 w-4 text-primary" aria-hidden />
@@ -996,8 +997,8 @@ function StepLaunch({
       </Card>
       )}
 
-      <div className={`grid grid-cols-1 gap-3 ${PMF_MODE ? "max-w-md mx-auto" : "sm:grid-cols-2"}`}>
-        {!PMF_MODE && (
+      <div className={`grid grid-cols-1 gap-3 ${!PAID_SALES_ENABLED ? "max-w-md mx-auto" : "sm:grid-cols-2"}`}>
+        {PAID_SALES_ENABLED && (
           <Card className="p-4">
             <div className="text-xs text-muted-foreground">Next</div>
             <div className="font-medium mt-1">Earnings dashboard</div>
@@ -1009,7 +1010,7 @@ function StepLaunch({
           <div className="text-xs text-muted-foreground">More</div>
           <div className="font-medium mt-1">Publishing settings</div>
           <p className="text-xs text-muted-foreground mt-1">
-            {PMF_MODE ? "Review your public listing and book metadata." : "Release schedules, listing quality, and export settings."}
+            {!PAID_SALES_ENABLED ? "Review your public listing and book metadata." : "Release schedules, listing quality, and export settings."}
           </p>
           <Button asChild size="sm" variant="outline" className="mt-3">
             <Link to={`/book/${bookId}/publish`}>Open publishing center</Link>
@@ -1057,7 +1058,7 @@ function StepNav({
 }
 
 function EducationCards({ tier }: { tier: string }) {
-  const items = PMF_MODE ? [
+  const items = !PAID_SALES_ENABLED ? [
     { icon: BookOpen, title: "Free public listing", body: "Publish a validated book on ScrollLibrary without setting up payments." },
     { icon: Share2, title: "Shareable book page", body: "Give readers a public listing and sample while paid sales remain closed." },
     { icon: ShieldCheck, title: "GA boundary", body: "Paid checkout, payouts, release scheduling, and external distribution reopen only after their release gates pass." },
@@ -1075,7 +1076,7 @@ function EducationCards({ tier }: { tier: string }) {
           <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{body}</p>
         </Card>
       ))}
-      {!PMF_MODE && tier === "free" && (
+      {PAID_SALES_ENABLED && tier === "free" && (
         <Card className="p-4 sm:col-span-3 border-primary/30 bg-primary/5">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
             <div>

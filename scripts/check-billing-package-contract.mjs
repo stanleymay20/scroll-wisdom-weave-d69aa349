@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 // Source-only billing architecture contract. Runs in ordinary CI without Stripe secrets.
 const subscription = readFileSync("src/lib/subscription.ts", "utf8");
 const pricing = readFileSync("src/pages/Pricing.tsx", "utf8");
+const clientConfig = readFileSync("src/lib/config.ts", "utf8");
+const seller = readFileSync("src/pages/Sell.tsx", "utf8");
+const ownerControls = readFileSync("src/components/books/BookOwnerControls.tsx", "utf8");
+const bookCheckout = readFileSync("supabase/functions/create-book-checkout/index.ts", "utf8");
 const checkout = readFileSync("supabase/functions/create-checkout/index.ts", "utf8");
 const orderCheckout = readFileSync("supabase/functions/create-billing-order-checkout/index.ts", "utf8");
 const orderCatalogue = readFileSync("supabase/functions/_shared/billing-order-catalogue.ts", "utf8");
@@ -53,6 +57,20 @@ requireText(pricing, "Marketplace fees", "transparent marketplace fees");
 rejectText(pricing, "CREATOR_SUBSCRIPTION_TIERS", "legacy publisher tiers exposed on pricing");
 rejectText(pricing, "Commercial publishing rights", "commercial rights sold as a plan privilege");
 
+// Commercial GA must be independently switchable from specialized-generation
+// qualification and from the old PMF-only experimental surface.
+requireText(clientConfig, "VITE_COMMERCIAL_GA_ENABLED", "independent commercial GA browser switch");
+requireText(clientConfig, "enablePaidCheckout: COMMERCIAL_GA_ENABLED", "commercial checkout browser gate");
+requireText(clientConfig, "enableExports: COMMERCIAL_GA_ENABLED", "commercial export browser gate");
+requireText(clientConfig, "enableCanonicalPublication: COMMERCIAL_GA_ENABLED", "commercial publication browser gate");
+requireText(clientConfig, "enableSpecializedAuthoring: SPECIALIZED_AUTHORING_ENABLED", "specialized qualification remains independent");
+requireText(clientConfig, "VITE_MARKETPLACE_GA_ENABLED", "independent creator marketplace browser switch");
+requireText(clientConfig, "enableMarketplace: MARKETPLACE_GA_ENABLED", "marketplace UI gate");
+requireText(bookCheckout, "marketplacePaymentsEnabled()", "server marketplace payment gate");
+requireText(seller, "PAID_SALES_ENABLED = FEATURES.enableMarketplace", "seller wizard follows marketplace payout-ready gate");
+rejectText(seller, "PMF_MODE", "seller wizard still coupled to PMF mode");
+requireText(ownerControls, "isBookTypeReleasedForClient", "book-type mutation uses provider qualification helper");
+
 // Frontend and server limits must carry the same canonical numbers.
 for (const [needle, label] of [
   ["aiTextWordsPerMonth: 25_000", "Free text pool"],
@@ -89,6 +107,20 @@ requireText(checkout, 'status: "open"', "open Checkout Session reuse");
 requireText(checkout, 'code: "checkout_in_progress"', "single open plan checkout invariant");
 requireText(checkout, "planTierForProduct(catalogue, productId)", "same-domain subscription detection");
 
+// Commercial Checkout must collect the inputs required for Stripe Tax / B2B tax IDs.
+for (const [source, label] of [
+  [checkout, "subscription checkout"],
+  [orderCheckout, "one-time checkout"],
+  [bookCheckout, "storefront book checkout"],
+]) {
+  requireText(source, "automatic_tax: { enabled: true }", label + " automatic tax");
+  requireText(source, "tax_id_collection: { enabled: true", label + " tax ID collection");
+  requireText(source, 'billing_address_collection: "auto"', label + " billing address collection");
+  requireText(source, 'customer_update: { address: "auto", name: "auto" }', label + " customer address persistence");
+}
+requireText(webhook, "session.amount_subtotal", "tax-aware fulfillment compares pre-tax subtotal");
+requireText(webhook, "preTaxRefundAmount", "tax-inclusive refunds are mapped back to pre-tax ledger amounts");
+
 // Compute must be metered on server-owned, race-safe reservations.
 requireText(migration, "CREATE TABLE IF NOT EXISTS public.billing_usage_monthly", "monthly usage authority");
 requireText(migration, "pg_advisory_xact_lock", "atomic usage locking");
@@ -113,4 +145,4 @@ requireText(webhook, "subscriptionStatusGrantsAccess(status)", "webhook shared a
 requireText(checkSubscription, "subscriptionStatusGrantsAccess(subscription.status)", "subscription verification shared access policy");
 requireText(webhook, "Failed renewal is entitlement-significant for both billing domains.", "failed-renewal convergence");
 
-console.log("Billing package contract: PASS (economic Free -> Creator -> Pro -> Teams; usage metered; checkout fail-closed)");
+console.log("Billing package contract: PASS (commercial GA separated; economic ladder metered; tax-aware checkout fail-closed)");

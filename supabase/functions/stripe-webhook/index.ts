@@ -318,18 +318,23 @@ serve(async (req) => {
 
       const expectedAmount = Number(session.metadata?.expected_amount_cents ?? NaN);
       const expectedCurrency = String(session.metadata?.expected_currency ?? "").toLowerCase();
-      const sessionAmount = Number(session.amount_total ?? NaN);
+      const sessionSubtotal = Number(session.amount_subtotal ?? NaN);
+      const sessionTotal = Number(session.amount_total ?? NaN);
+      const sessionTax = Number(session.total_details?.amount_tax ?? 0);
       const sessionCurrency = String(session.currency ?? "").toLowerCase();
 
       if (
         !Number.isInteger(expectedAmount) ||
         expectedAmount < 0 ||
-        !Number.isInteger(sessionAmount) ||
-        sessionAmount !== expectedAmount
+        !Number.isInteger(sessionSubtotal) ||
+        sessionSubtotal !== expectedAmount
       ) {
         throw new Error(
-          `Checkout amount authority mismatch: expected=${expectedAmount} actual=${sessionAmount}`,
+          `Checkout subtotal authority mismatch: expected=${expectedAmount} actual=${sessionSubtotal}`,
         );
+      }
+      if (!Number.isInteger(sessionTotal) || sessionTotal < sessionSubtotal || sessionTax < 0) {
+        throw new Error("Checkout tax/total authority is invalid");
       }
       if (
         !expectedCurrency ||
@@ -350,7 +355,7 @@ serve(async (req) => {
           throw new Error("Checkout identity does not match the persisted pending purchase");
         }
         if (
-          Number(existing.amount_cents ?? NaN) !== sessionAmount ||
+          Number(existing.amount_cents ?? NaN) !== sessionSubtotal ||
           String(existing.currency ?? "").toLowerCase() !== sessionCurrency
         ) {
           throw new Error("Checkout amount/currency does not match the persisted pending purchase");
@@ -365,7 +370,7 @@ serve(async (req) => {
           existing.id,
           buyerUserId,
           existing.status === "refunded" ? "refund_replay" : source + "_replay",
-          Number(existing.amount_cents ?? session.amount_total ?? 0),
+          Number(existing.amount_cents ?? session.amount_subtotal ?? 0),
         );
         logStep("Purchase replay reconciled", {
           sessionId: session.id,
@@ -380,7 +385,7 @@ serve(async (req) => {
         buyer_user_id: buyerUserId,
         buyer_email: email,
         stripe_payment_intent: session.payment_intent as string | null,
-        amount_cents: session.amount_total ?? 0,
+        amount_cents: session.amount_subtotal ?? 0,
         currency: (session.currency ?? "usd").toLowerCase(),
         purchased_at: new Date().toISOString(),
         correlation_id: corr,
@@ -537,11 +542,16 @@ serve(async (req) => {
         throw new Error("Billing order session does not match authoritative order");
       }
 
+      const amountSubtotal = Number(session.amount_subtotal ?? -1);
       const amountTotal = Number(session.amount_total ?? -1);
+      const amountTax = Number(session.total_details?.amount_tax ?? 0);
       const currency = String(session.currency ?? "").toLowerCase();
-      if (amountTotal !== Number(order.expected_amount_cents)
+      if (amountSubtotal !== Number(order.expected_amount_cents)
           || currency !== String(order.currency).toLowerCase()) {
-        throw new Error("Billing order amount/currency mismatch");
+        throw new Error("Billing order subtotal/currency mismatch");
+      }
+      if (!Number.isInteger(amountTotal) || amountTotal < amountSubtotal || amountTax < 0) {
+        throw new Error("Billing order tax/total authority is invalid");
       }
 
       const paymentIntentId = typeof session.payment_intent === "string"
@@ -572,12 +582,53 @@ serve(async (req) => {
           order_id: order.id,
           kind: order.kind,
           sku: order.sku,
-          amount_cents: amountTotal,
+          subtotal_cents: amountSubtotal,
+          tax_cents: amountTax,
+          total_cents: amountTotal,
           currency,
           source,
           idempotent: (result as { idempotent?: boolean } | null)?.idempotent === true,
         },
       });
+    };
+
+    const preTaxRefundAmount = async (
+      refund: Stripe.Refund,
+      subtotalCents: number,
+      priorSubtotalRefundedCents: number,
+    ): Promise<number> => {
+      if (!Number.isInteger(subtotalCents) || subtotalCents <= 0) {
+        throw new Error("Refund subtotal authority is invalid");
+      }
+
+      const remainingSubtotal = Math.max(subtotalCents - priorSubtotalRefundedCents, 0);
+      if (remainingSubtotal === 0) return 0;
+
+      const chargeId = typeof refund.charge === "string"
+        ? refund.charge
+        : refund.charge?.id ?? null;
+      if (!chargeId) {
+        throw new Error("Refund is missing charge identity required for tax allocation");
+      }
+
+      const charge = await stripe.charges.retrieve(chargeId);
+      const paidTotal = Number(charge.amount ?? 0);
+      const refundedTotal = Number(charge.amount_refunded ?? 0);
+      if (!Number.isInteger(paidTotal) || paidTotal <= 0) {
+        throw new Error("Refund charge total is invalid");
+      }
+
+      // On the final Stripe refund reverse the exact remaining pre-tax subtotal
+      // so proportional rounding across earlier partial refunds can never leave
+      // a one-cent creator/entitlement balance.
+      if (charge.refunded || refundedTotal >= paidTotal) {
+        return remainingSubtotal;
+      }
+
+      const proportional = Math.round(
+        Number(refund.amount) * subtotalCents / paidTotal,
+      );
+      return Math.max(1, Math.min(remainingSubtotal, proportional));
     };
 
     const reconcileRefund = async (
@@ -633,7 +684,7 @@ serve(async (req) => {
       if (!purchase) {
         const { data: billingOrder, error: billingOrderError } = await supabase
           .from("billing_orders")
-          .select("id,user_id")
+          .select("id,user_id,expected_amount_cents")
           .eq("stripe_payment_intent_id", paymentIntentId)
           .maybeSingle();
 
@@ -642,12 +693,27 @@ serve(async (req) => {
         }
 
         if (billingOrder) {
+          const { data: priorOrderRefunds, error: priorOrderRefundsError } = await supabase
+            .from("billing_order_refunds")
+            .select("amount_cents")
+            .eq("billing_order_id", billingOrder.id);
+          if (priorOrderRefundsError) {
+            throw new Error("Billing order prior refund lookup failed: " + priorOrderRefundsError.message);
+          }
+          const priorSubtotalRefunded = (priorOrderRefunds ?? [])
+            .reduce((sum, row) => sum + Number(row.amount_cents ?? 0), 0);
+          const refundSubtotal = await preTaxRefundAmount(
+            refund,
+            Number(billingOrder.expected_amount_cents),
+            priorSubtotalRefunded,
+          );
+
           const { data: refundResult, error: refundError } = await supabase.rpc(
             "record_billing_order_refund",
             {
               _order_id: billingOrder.id,
               _stripe_refund_id: refund.id,
-              _amount_cents: refund.amount,
+              _amount_cents: refundSubtotal,
             },
           );
           if (refundError) {
@@ -664,7 +730,8 @@ serve(async (req) => {
             payload: {
               order_id: billingOrder.id,
               refund_id: refund.id,
-              amount_cents: refund.amount,
+              stripe_refund_total_cents: refund.amount,
+              refund_subtotal_cents: refundSubtotal,
               source,
               fully_refunded: (refundResult as { fully_refunded?: boolean } | null)?.fully_refunded === true,
             },
@@ -680,12 +747,28 @@ serve(async (req) => {
         return;
       }
 
+      const { data: priorPurchaseRefunds, error: priorPurchaseRefundsError } = await supabase
+        .from("creator_earnings_ledger")
+        .select("gross_cents")
+        .eq("purchase_id", purchase.id)
+        .eq("entry_type", "refund");
+      if (priorPurchaseRefundsError) {
+        throw new Error("Purchase prior refund lookup failed: " + priorPurchaseRefundsError.message);
+      }
+      const priorSubtotalRefunded = (priorPurchaseRefunds ?? [])
+        .reduce((sum, row) => sum + Math.max(0, -Number(row.gross_cents ?? 0)), 0);
+      const refundSubtotal = await preTaxRefundAmount(
+        refund,
+        Number(purchase.amount_cents),
+        priorSubtotalRefunded,
+      );
+
       const { data: ledgerData, error: ledgerError } = await supabase.rpc(
         "record_purchase_refund_ledger",
         {
           _purchase_id: purchase.id,
           _refund_event_id: refund.id,
-          _refund_amount_cents: refund.amount,
+          _refund_amount_cents: refundSubtotal,
         },
       );
 
