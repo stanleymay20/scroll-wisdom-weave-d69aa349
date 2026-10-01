@@ -30,6 +30,9 @@ verify_jwt = false
 [functions.create-checkout]
 verify_jwt = false
 
+[functions.create-billing-order-checkout]
+verify_jwt = false
+
 [functions.customer-portal]
 verify_jwt = false
 
