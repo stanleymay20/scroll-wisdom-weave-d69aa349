@@ -107,7 +107,7 @@ export default function Pricing() {
         if (!error && data?.subscribed === true) {
           toast({
             title: "Subscription activated!",
-            description: "Your verified plan entitlements are now active.",
+            description: "Welcome! Your features are now unlocked.",
           });
         } else {
           toast({
@@ -324,7 +324,7 @@ export default function Pricing() {
                           ) : plan.tierKey === "free" ? (
                             "Get started free"
                           ) : !FEATURES.enableSubscriptionCheckout ? (
-                            "Checkout opens after validation"
+                            "Available after payment validation"
                           ) : (
                             `Choose ${config.name}`
                           )}
