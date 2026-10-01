@@ -37,7 +37,7 @@ import {
   Users, TrendingUp, PartyPopper, Pencil, Store, ShoppingBag,
 } from "lucide-react";
 import { publishExternallyOneClick, waitForBundle } from "@/lib/oneClickPublish";
-import { PMF_MODE } from "@/lib/config";
+import { FEATURES } from "@/lib/config";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -74,7 +74,7 @@ const STEP_LABELS: Record<Step, string> = {
   3: "Publish",
   4: "Launch",
 };
-const ACTIVE_STEPS: Step[] = PMF_MODE ? [0, 1, 3, 4] : [0, 1, 2, 3, 4];
+const ACTIVE_STEPS: Step[] = FEATURES.enablePaidCheckout ? [0, 1, 2, 3, 4] : [0, 1, 3, 4];
 const TOTAL_STEPS = ACTIVE_STEPS.length;
 const DRAFT_KEY = "sell_wizard_draft_v1";
 
@@ -234,12 +234,12 @@ export default function Sell() {
       // Old local drafts may still point at the payout step. Paid sales are not
       // part of PMF/GA, so resume at Profile or Publish instead of asking for
       // financial information that cannot be used yet.
-      if (PMF_MODE && next.step === 2) {
+      if (!FEATURES.enablePaidCheckout && next.step === 2) {
         next = { ...next, step: ap || next.profile.display_name.trim() ? 3 as Step : 1 as Step };
       }
 
       // Payout setup is loaded only when the paid-sales path is actually open.
-      if (!PMF_MODE) {
+      if (FEATURES.enablePaidCheckout) {
         let payout: any = null;
         try {
           const { data: pd } = await supabase.functions.invoke("creator-payout-profile", { method: "GET" });
@@ -308,7 +308,7 @@ export default function Sell() {
       setDraft((d) => ({ ...d, profile: { ...d.profile, slug: savedSlug } }));
       setHasAuthorProfile(true);
       toast.success("Profile saved");
-      setStep(PMF_MODE ? 3 : 2);
+      setStep(FEATURES.enablePaidCheckout ? 2 : 3);
     } catch (e: any) {
       toast.error(friendlyError(e, "Could not save profile"));
     } finally { setSavingStep(false); }
@@ -347,7 +347,7 @@ export default function Sell() {
     }
     const baseSlug = draft.publish.slug || slugify(books.find(b => b.id === draft.publish.book_id)?.title ?? "");
     if (!baseSlug) { toast.error("URL slug is required"); return; }
-    const priceCents = PMF_MODE ? 0 : Math.max(0, Math.floor(draft.publish.price_cents || 0));
+    const priceCents = FEATURES.enablePaidCheckout ? Math.max(0, Math.floor(draft.publish.price_cents || 0)) : 0;
     const isPaid = priceCents > 0;
 
     setSavingStep(true);
