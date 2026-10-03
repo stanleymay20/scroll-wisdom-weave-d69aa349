@@ -180,3 +180,17 @@ verify_jwt = false
 # internally with requireUser(); outbound requests are HMAC-signed.
 [functions.relay-growth-event]
 verify_jwt = false
+
+# OAuth 2.1 identity provider for authenticated MCP clients.
+# Production enablement requires verified asymmetric signing and the canonical
+# ScrollLibrary Auth Site URL; the connector itself remains capability-bounded.
+[auth.oauth_server]
+enabled = true
+authorization_url_path = "/oauth/consent"
+allow_dynamic_registration = true
+
+# MCP OAuth discovery and token validation occur inside the function through
+# @supabase/server middleware. Gateway verification stays off so RFC 9728
+# protected-resource metadata remains reachable before authentication.
+[functions.mcp]
+verify_jwt = false

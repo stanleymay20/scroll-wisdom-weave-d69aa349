@@ -30,6 +30,11 @@ type AuthSessionLike = {
   refresh_token: string;
 };
 
+function safeInternalRedirect(value: string | null | undefined): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
+  return value;
+}
+
 const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
   const [searchParams] = useSearchParams();
   const initialMode = searchParams.get("mode") as AuthMode || "login";
@@ -47,7 +52,11 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
-  const redirectTo = (location.state as any)?.redirectTo || "/";
+  const redirectTo = safeInternalRedirect(
+    (location.state as { redirectTo?: string } | null)?.redirectTo ??
+      searchParams.get("returnTo"),
+  );
+  const authCallbackUrl = `${window.location.origin}/auth?returnTo=${encodeURIComponent(redirectTo)}`;
   const isRecoveryRef = useRef(false);
   const modeRef = useRef(mode);
   const redirectRef = useRef(redirectTo);
@@ -187,7 +196,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
       const { error } = await withTransientRetry(() =>
         supabase.auth.signInWithOtp({
           email: safeEmail,
-          options: { emailRedirectTo: `${window.location.origin}/` },
+          options: { emailRedirectTo: authCallbackUrl },
         })
       );
       if (error) throw error;
@@ -286,7 +295,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
           newsletter_subscribed: newsletterSubscribed,
         };
 
-        const redirectUrl = `${window.location.origin}/`;
+        const redirectUrl = authCallbackUrl;
         let signupData: { user?: { id?: string } | null; session?: AuthSessionLike | null } | null = null;
 
         try {
@@ -304,7 +313,12 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
           signupData = data;
         } catch (error) {
           if (!isTransientAuthError(error)) throw error;
-          const fallbackData = await signUpFallback(safeEmail, safePassword, signupMetadata);
+          const fallbackData = await signUpFallback(
+            safeEmail,
+            safePassword,
+            signupMetadata,
+            redirectUrl,
+          );
           signupData = {
             user: fallbackData.user ? { id: fallbackData.user.id } : null,
             session: fallbackData.access_token && fallbackData.refresh_token

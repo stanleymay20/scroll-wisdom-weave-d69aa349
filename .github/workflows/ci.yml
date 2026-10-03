@@ -108,6 +108,8 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-browser-role-truncate.sql
       - name: Assert AI Publishing Bridge remains proposal-only for browser roles
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-ai-publishing-bridge-db-security.sql
+      - name: Assert MCP OAuth tokens cannot bypass curated capabilities
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-mcp-oauth-capability-boundary.sql
       - name: Rebuild hardened ISBN schema from verified legacy staging shape
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-legacy-staging-isbn-convergence.sql
       - name: Assert ISBN governance, RLS and transactional mint contract
@@ -213,6 +215,7 @@ jobs:
           deno check supabase/functions/generate-chapter/index.ts
           deno check supabase/functions/generation-worker/index.ts
           deno check supabase/functions/ai-publishing-bridge/index.ts
+          deno check --config supabase/functions/mcp/deno.json supabase/functions/mcp/index.ts
           deno check supabase/functions/generate-cover/index.ts
           deno check supabase/functions/generate-cover-raw/index.ts
           deno check supabase/functions/process-document/index.ts
@@ -388,6 +391,8 @@ jobs:
         run: bun run audit:edge-auth
       - name: Reject orphaned Edge Functions
         run: bun run audit:function-reachability
+      - name: Enforce proposal-only MCP OAuth capability boundary
+        run: bun scripts/check-mcp-oauth-capability-boundary.mjs
       - name: Enforce generated-book qualification release wiring
         run: bun run audit:provider-qualification-gates
       - name: Compile qualification evidence collector

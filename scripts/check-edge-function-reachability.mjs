@@ -63,6 +63,7 @@ const externalEntrypoints = new Map([
   ["shopify-oauth-callback", "Shopify OAuth callback"],
   ["materialize-release-schedules", "scheduler/operational fallback endpoint"],
   ["resolve-scroll-id", "public ScrollLibrary identifier-resolution API"],
+  ["mcp", "authenticated MCP/OAuth external endpoint"],
 ]);
 
 const failures = [];
