@@ -18,6 +18,8 @@ const paths = {
   oneTimeCatalogue: 'supabase/functions/_shared/billing-order-catalogue.ts',
   subscription: 'src/lib/subscription.ts',
   pricingPage: 'src/pages/Pricing.tsx',
+  typographyReport: 'src/components/publish/TypographyReport.tsx',
+  bestsellerQa: 'src/components/generate/BestsellerQAScore.tsx',
   evidenceCategories: 'src/lib/academicCategories.ts',
   evidenceMigration: 'supabase/migrations/20261004190000_health_psychology_publication_evidence.sql',
 };
@@ -35,6 +37,8 @@ const pricing = read(paths.pricingContract);
 const oneTime = read(paths.oneTimeCatalogue);
 const subscription = read(paths.subscription);
 const pricingPage = read(paths.pricingPage);
+const typographyReport = read(paths.typographyReport);
+const bestsellerQa = read(paths.bestsellerQa);
 const evidenceCategories = read(paths.evidenceCategories);
 const evidenceMigration = read(paths.evidenceMigration);
 const corpus = JSON.parse(read(paths.corpus));
@@ -100,6 +104,27 @@ for (const phrase of [
   '"draft" | "verified" | "press_certified"',
 ]) {
   if (!pressPolicy.includes(phrase)) fail(`strict Press certification policy drifted: ${phrase}`);
+}
+
+// Draft-level helper reports must never imply publication certification or market outcome.
+for (const forbidden of ['"Publication Ready"', '> Publication Ready<']) {
+  if (typographyReport.includes(forbidden)) fail(`typography-only validator regained publication claim: ${forbidden}`);
+}
+for (const forbidden of ['"Bestseller Ready"', '"Publish-ready layout"', 'label: "Layout checks passed"']) {
+  if (bestsellerQa.includes(forbidden)) fail(`unqualified bestseller QA claim returned: ${forbidden}`);
+}
+for (const required of [
+  'Typography checks passed',
+  'does not by itself make a manuscript Verified or ScrollLibrary Press Certified',
+]) {
+  if (!typographyReport.includes(required)) fail(`typography truthfulness copy missing: ${required}`);
+}
+for (const required of [
+  'Strong QA score',
+  'not a sales forecast, publication certification, or ScrollLibrary Press Certified claim',
+  'Layout quality checks',
+]) {
+  if (!bestsellerQa.includes(required)) fail(`bestseller QA truthfulness copy missing: ${required}`);
 }
 
 // Pricing capacity must remain explicit because projects and generated words are separate concepts.

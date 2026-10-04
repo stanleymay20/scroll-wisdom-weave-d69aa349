@@ -58,8 +58,8 @@ export default function TypographyReport({ bookId }: { bookId: string }) {
       setResult(data as GuardResult);
       const r = (data as GuardResult).report;
       toast({
-        title: r.publicationReady ? "Publication Ready" : "Blockers detected",
-        description: `Score ${r.validationScore} · ${r.blockerCount} blocker(s), ${r.warningCount} warning(s)`,
+        title: r.publicationReady ? "Typography checks passed" : "Typography blockers detected",
+        description: `Layout score ${r.validationScore} · ${r.blockerCount} blocker(s), ${r.warningCount} warning(s). This check alone does not certify the manuscript for publication.`,
         variant: r.publicationReady ? "default" : "destructive",
       });
     } catch (e) {
@@ -77,7 +77,7 @@ export default function TypographyReport({ bookId }: { bookId: string }) {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Typography & Pagination Report</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Deterministic layout validation. Publication is blocked while any P0 rule fails.
+            Deterministic layout validation only. Passing this guard is one input to publication review; it does not by itself make a manuscript Verified or ScrollLibrary Press Certified.
           </p>
         </div>
         <Button onClick={run} disabled={running}>
@@ -95,7 +95,7 @@ export default function TypographyReport({ bookId }: { bookId: string }) {
         >
           <div className="grid sm:grid-cols-3 gap-4">
             <div>
-              <div className="text-sm text-muted-foreground">Overall score</div>
+              <div className="text-sm text-muted-foreground">Layout score</div>
               <div className="text-3xl font-semibold text-foreground">{r.validationScore}</div>
               <Progress value={r.validationScore} className="mt-2" />
             </div>
@@ -105,10 +105,10 @@ export default function TypographyReport({ bookId }: { bookId: string }) {
               <div className="text-xs text-muted-foreground mt-1">{r.totalBlocks} semantic blocks</div>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">Status</div>
+              <div className="text-sm text-muted-foreground">Typography status</div>
               <Badge variant="outline" className={r.publicationReady ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30 mt-2" : "bg-destructive/15 text-destructive border-destructive/30 mt-2"}>
                 {r.publicationReady
-                  ? <><CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Publication Ready</>
+                  ? <><CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Layout checks passed</>
                   : <><AlertTriangle className="h-3.5 w-3.5 mr-1" /> {r.blockerCount} blocker(s)</>}
               </Badge>
             </div>
@@ -124,7 +124,7 @@ export default function TypographyReport({ bookId }: { bookId: string }) {
 
           {r.issues.length === 0 ? (
             <div className="text-sm text-muted-foreground border border-border rounded-md p-4">
-              No issues detected. This manuscript passes the Typography & Pagination Guard.
+              No typography or pagination issues detected. This manuscript passes the Typography & Pagination Guard; other publication and certification gates may still be required.
             </div>
           ) : (
             <div className="border border-border rounded-md divide-y divide-border max-h-[420px] overflow-y-auto">
