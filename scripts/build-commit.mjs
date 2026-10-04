@@ -104,3 +104,29 @@ export function requireReleaseCommit(env = process.env, root = process.cwd()) {
   }
   return identity;
 }
+
+/**
+ * Production build identity policy.
+ *
+ * Trusted release systems bind the build to a declared SHA using one of the
+ * release identity variables below. If any such variable is present, keep the
+ * strict `requireReleaseCommit` contract so malformed or mismatched release
+ * declarations fail the build.
+ *
+ * Hosted builders such as Lovable can rebuild an already-reviewed repository
+ * without forwarding Git metadata or a release SHA. They must still be able to
+ * emit an honest `commit: null, commitSource: unavailable` release manifest;
+ * deployment is accepted only later when the deterministic source fingerprint
+ * and file count exactly match the intended release candidate.
+ */
+export function resolveProductionBuildCommit(env = process.env, root = process.cwd()) {
+  const hasDeclaredReleaseIdentity = [
+    env.RELEASE_COMMIT_SHA,
+    env.GITHUB_SHA,
+    env.VITE_BUILD_ID,
+  ].some((value) => Boolean(value?.trim()));
+
+  return hasDeclaredReleaseIdentity
+    ? requireReleaseCommit(env, root)
+    : resolveBuildCommit(env, root);
+}
