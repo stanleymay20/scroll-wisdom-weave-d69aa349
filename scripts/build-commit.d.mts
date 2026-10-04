@@ -11,3 +11,8 @@ export function requireReleaseCommit(
   env?: Record<string, string | undefined>,
   root?: string,
 ): { commit: string; source: BuildCommitSource };
+
+export function resolveProductionBuildCommit(
+  env?: Record<string, string | undefined>,
+  root?: string,
+): { commit: string | null; source: BuildCommitSource };
