@@ -45,6 +45,8 @@ Standard Text remains fail-closed for any near-10/ScrollLibrary Press Certified 
 
 Strong acquisition value. The user gets a meaningful short-book workflow rather than a token demo. Free quality should be described as draft/verification capable unless separately qualified.
 
+A separate product/economics decision remains: when Commercial GA enables the editorial pipeline, the current book-owner UI can launch publication review without a subscription-tier gate. Some review stages use provider compute outside the headline text-generation meter. This should be explicitly classified either as a universal safety/verification benefit or as a paid entitlement before commercial GA, rather than remaining accidental behavior.
+
 ### Creator ($19/month)
 
 Strong value for regular creation and exporting. The 250k monthly word pool is the true text-capacity constraint; 10 projects must not be interpreted as 10 fixed-length full books. Creator uses the paid Flash generation route and Flash editorial route.
@@ -65,6 +67,12 @@ Strong pooled economics when collaboration/organization workflows are proven. Do
 4. Label marketplace fee discounts as conditional on marketplace GA until seller payment/payout settlement is enabled and proven.
 5. Publishing bundles must not cost more than equivalent Single Edition purchases unless they disclose additional included service value.
 6. Assisted Publishing Launch requires a concrete service-level scope before sale (human review rounds, metadata QA, format preparation, distribution checklist, revisions, support and exclusions).
+
+## Factual-domain convergence findings
+
+The authoring UI already offered Health and Psychology, but the original persisted `book_category` enum did not contain those values. The quality branch therefore adds the missing enum values and then applies the same publication-evidence governance to both categories. The existing database policy regression test now covers Business, Health, Psychology, dynamic material claims, and the fiction exemption.
+
+One follow-up remains in the research provider routing: PubMed is currently selected only for `medicine`, `science`, and `theology`. Health and Psychology still receive OpenAlex/CrossRef/Semantic Scholar research, but the PubMed route should also explicitly include `health` and `psychology` before those categories are promoted as optimally research-grounded.
 
 ## Recommended publishing package ladder
 
