@@ -24,3 +24,10 @@ jobs:
         run: node scripts/check-content-quality-standard.mjs
       - name: Validate any committed Standard Text human-review evidence
         run: node scripts/check-standard-text-human-review.mjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: 2.9.6
+      - name: Type-check strict ScrollLibrary Press certification policy
+        run: deno check supabase/functions/_shared/press-certification.ts
+      - name: Test Draft, Verified and Press Certified boundaries
+        run: deno test supabase/functions/_shared/press-certification_test.ts
