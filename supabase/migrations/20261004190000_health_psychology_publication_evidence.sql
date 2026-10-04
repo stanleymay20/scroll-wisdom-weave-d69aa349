@@ -1,8 +1,19 @@
--- Extend factual-domain publication evidence governance to health and psychology.
+-- Converge the persisted category enum with the existing public authoring surface,
+-- then extend factual-domain publication evidence governance to Health and Psychology.
 --
+-- The UI already exposes both categories. Historically public.book_category did
+-- not contain them, so a valid browser selection could reach a database enum
+-- mismatch. Add the enum values first; the evidence function below compares the
+-- category through ::text so it does not depend on enum literals in this migration.
+
+ALTER TYPE public.book_category ADD VALUE IF NOT EXISTS 'health';
+ALTER TYPE public.book_category ADD VALUE IF NOT EXISTS 'psychology';
+
 -- The dynamic material-claim policy already catches many quantified/legal claims,
 -- but these domains should fail closed by category because medically/psychologically
 -- relevant prose can make consequential claims without a date, percentage or currency cue.
+-- Preserve the existing 20260930220000 dynamic-material-claim semantics and add
+-- only the two newly persistable governed categories.
 
 CREATE OR REPLACE FUNCTION public.book_requires_publication_evidence(p_book_id uuid)
 RETURNS boolean
