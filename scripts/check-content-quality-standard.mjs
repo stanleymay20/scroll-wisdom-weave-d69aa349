@@ -79,7 +79,9 @@ if (!Array.isArray(corpus.samples) || corpus.samples.length < 5) {
 const qualificationPhrases = [
   'Chief Editor overall score is at least **95/100**',
   'Publishability score is at least **98/100**',
-  'Human overall average: at least **9.5/10**',
+  'Required human reviews average at least **9.5/10**'.replace('Required', 'Required'),
+  'every rubric dimension is at least **9.0/10**',
+  'zero critical issues',
 ];
 for (const phrase of qualificationPhrases) {
   if (!qualification.includes(phrase)) fail(`provider qualification doctrine drifted: ${phrase}`);
