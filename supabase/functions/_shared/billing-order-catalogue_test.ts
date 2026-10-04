@@ -12,9 +12,24 @@ Deno.test("one-time billing catalogue pins economic list prices", () => {
   assertEquals(ONE_TIME_BILLING_CATALOGUE.visual_50.amountCents, 2000);
   assertEquals(ONE_TIME_BILLING_CATALOGUE.audio_60.amountCents, 1500);
   assertEquals(ONE_TIME_BILLING_CATALOGUE.single_edition.amountCents, 4900);
-  assertEquals(ONE_TIME_BILLING_CATALOGUE.print_digital.amountCents, 9900);
-  assertEquals(ONE_TIME_BILLING_CATALOGUE.complete_edition.amountCents, 14900);
+  assertEquals(ONE_TIME_BILLING_CATALOGUE.print_digital.amountCents, 8900);
+  assertEquals(ONE_TIME_BILLING_CATALOGUE.complete_edition.amountCents, 12900);
   assertEquals(ONE_TIME_BILLING_CATALOGUE.assisted_launch.amountCents, 39900);
+});
+
+Deno.test("publishing bundles cost less than equivalent Single Edition purchases", () => {
+  const single = ONE_TIME_BILLING_CATALOGUE.single_edition.amountCents;
+  if (!(ONE_TIME_BILLING_CATALOGUE.print_digital.amountCents < single * 2)) {
+    throw new Error("Print + Digital must provide a real bundle saving");
+  }
+  if (!(ONE_TIME_BILLING_CATALOGUE.complete_edition.amountCents < single * 3)) {
+    throw new Error("Complete Edition must provide a real bundle saving");
+  }
+});
+
+Deno.test("usage product names expose understandable customer units", () => {
+  assertEquals(ONE_TIME_BILLING_CATALOGUE.visual_50.name, "+50 AI-generated visuals");
+  assertEquals(ONE_TIME_BILLING_CATALOGUE.audio_60.name, "+60 narration minutes");
 });
 
 Deno.test("one-time SKU allow-list rejects unknown items and Teams seats", () => {
@@ -36,7 +51,6 @@ Deno.test("one-time checkout price is environment-owned and fails closed", () =>
     "Stripe price id",
   );
 });
-
 
 Deno.test("one-time test override is accepted only with a test key", () => {
   const override = JSON.stringify({ visual_50: "price_test_visual" });
