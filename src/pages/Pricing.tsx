@@ -40,36 +40,36 @@ const plans: PlanConfig[] = [
       "1 book project / month",
       "25k AI-generated words / month",
       "Up to 4,000 words / chapter",
-      "5 audio credits",
+      "5 narration minutes",
       "Reader, quizzes & certificates",
-      "15% ScrollLibrary marketplace fee",
+      "15% marketplace fee when marketplace selling is available",
     ],
   },
   {
-    description: "For authors creating and selling regularly",
+    description: "For authors creating and exporting regularly",
     icon: Zap,
     tierKey: "student",
     features: [
       "10 book projects / month",
       "250k AI-generated words / month",
-      "10 visual credits",
-      "15 audio credits",
+      "10 AI-generated visuals",
+      "15 narration minutes",
       "PDF / EPUB / DOCX when export gate is open",
-      "10% ScrollLibrary marketplace fee",
+      "10% marketplace fee when marketplace selling is available",
     ],
   },
   {
-    description: "For serious authors and publishing businesses",
+    description: "For serious authors preparing work for publication",
     icon: Sparkles,
     popular: true,
     tierKey: "premium",
     features: [
       "30 book projects / month",
       "1M AI-generated words / month",
-      "60 visual credits",
-      "60 audio credits",
-      "EPIE / publishing intelligence when qualified",
-      "5% ScrollLibrary marketplace fee",
+      "60 AI-generated visuals",
+      "60 narration minutes",
+      "KDP PDF + stronger publication editorial review",
+      "5% marketplace fee when marketplace selling is available",
     ],
   },
   {
@@ -79,10 +79,10 @@ const plans: PlanConfig[] = [
     features: [
       "100 pooled book projects / month",
       "2.5M pooled AI-generated words / month",
-      "200 visual credits",
-      "180 audio credits",
+      "200 AI-generated visuals",
+      "180 narration minutes",
       "5 seats included",
-      "3% ScrollLibrary marketplace fee",
+      "3% marketplace fee when marketplace selling is available",
     ],
   },
 ];
@@ -265,7 +265,7 @@ export default function Pricing() {
               </div>
             </div>
 
-            <div className="grid gap-6 mx-auto mb-10 max-w-6xl sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-6 mx-auto mb-6 max-w-6xl sm:grid-cols-2 lg:grid-cols-4">
               {plans.map((plan, index) => {
                 const config = SUBSCRIPTION_TIERS[plan.tierKey];
                 const isCurrent = isCurrentPlan(plan.tierKey);
@@ -340,6 +340,11 @@ export default function Pricing() {
               })}
             </div>
 
+            <div className="mb-10 rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground max-w-4xl mx-auto">
+              <p><strong className="text-foreground">How usage works:</strong> book projects are creation slots, while your monthly AI-word allowance is shared across the books you generate. A generated visual uses one visual request. Narration is metered in standard narration minutes.</p>
+              <p className="mt-2">You retain ownership of what you create, subject to applicable law and any third-party/source rights described in the Terms. Commercial rights are not sold as a premium-plan privilege.</p>
+            </div>
+
             {!FEATURES.enableSubscriptionCheckout && (
               <div id="billing" className="mb-14 rounded-2xl border bg-muted/30 p-6 md:p-8 text-center">
                 <Badge variant="secondary" className="mb-3">GA safety gate</Badge>
@@ -361,30 +366,38 @@ export default function Pricing() {
                 </p>
               </div>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {publishingPackages.map(([sku, pkg]) => (
-                  <Card key={sku}>
-                    <CardHeader>
-                      <CardTitle className="text-lg">{pkg.name}</CardTitle>
-                      <div><span className="text-2xl font-bold">${pkg.price}</span><span className="text-muted-foreground text-sm"> one-time</span></div>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                      <p className="text-muted-foreground">{pkg.description}</p>
-                      <p><strong>Up to {pkg.maxIsbns}</strong> eligible format-specific ISBN{pkg.maxIsbns === 1 ? "" : "s"}</p>
-                      <p className="text-xs text-muted-foreground">Payment creates a publishing-service order. ISBN assignment occurs only after publication validation.</p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full"
-                        disabled={!FEATURES.enablePaidCheckout || !!orderCheckoutLoading}
-                        onClick={() => handleOneTimePurchase(sku)}
-                      >
-                        {orderCheckoutLoading === sku
-                          ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing…</>
-                          : FEATURES.enablePaidCheckout ? "Purchase service" : "Available after validation"}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
+                {publishingPackages.map(([sku, pkg]) => {
+                  const assistedLaunchPending = sku === "assisted_launch";
+                  return (
+                    <Card key={sku}>
+                      <CardHeader>
+                        <CardTitle className="text-lg">{pkg.name}</CardTitle>
+                        <div><span className="text-2xl font-bold">${pkg.price}</span><span className="text-muted-foreground text-sm"> one-time</span></div>
+                      </CardHeader>
+                      <CardContent className="space-y-3 text-sm">
+                        <p className="text-muted-foreground">{pkg.description}</p>
+                        <p><strong>Up to {pkg.maxIsbns}</strong> eligible format-specific ISBN{pkg.maxIsbns === 1 ? "" : "s"}</p>
+                        <p className="text-xs text-muted-foreground">Payment creates a publishing-service order. ISBN assignment occurs only after publication validation.</p>
+                        {assistedLaunchPending && (
+                          <p className="text-xs text-muted-foreground">Human-assisted service remains closed until staffing, turnaround and fulfillment tracking are operationally validated.</p>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full"
+                          disabled={!FEATURES.enablePaidCheckout || !!orderCheckoutLoading || assistedLaunchPending}
+                          onClick={() => handleOneTimePurchase(sku)}
+                        >
+                          {assistedLaunchPending
+                            ? "Human service setup pending"
+                            : orderCheckoutLoading === sku
+                              ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing…</>
+                              : FEATURES.enablePaidCheckout ? "Purchase service" : "Available after validation"}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </section>
 
@@ -439,8 +452,10 @@ export default function Pricing() {
                 <Store className="h-7 w-7 mx-auto text-primary mb-2" />
                 <h2 className="text-3xl font-display font-bold">Marketplace fees</h2>
                 <p className="text-muted-foreground mt-2">
-                  ScrollLibrary service fee only. Payment processing, taxes, refunds and currency conversion are separate.
+                  These rates apply when marketplace selling is enabled. ScrollLibrary service fee only; payment processing,
+                  taxes, refunds and currency conversion are separate.
                 </p>
+                {!FEATURES.enableMarketplace && <Badge variant="secondary" className="mt-3">Marketplace selling is not open yet</Badge>}
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {(["free", "student", "premium", "prophet_tier"] as SubscriptionTier[]).map((key) => {
@@ -450,7 +465,7 @@ export default function Pricing() {
                       <CardContent className="p-5 text-center">
                         <div className="font-medium">{config.name}</div>
                         <div className="text-3xl font-bold mt-1">{config.features.marketplaceFeeBps / 100}%</div>
-                        <div className="text-xs text-muted-foreground mt-1">ScrollLibrary service fee</div>
+                        <div className="text-xs text-muted-foreground mt-1">ScrollLibrary service fee when selling is available</div>
                       </CardContent>
                     </Card>
                   );
