@@ -35,7 +35,6 @@ export function BestsellerQAScore({
 }: BestsellerQAScoreProps) {
   const passedCount = checks.filter((c) => c.passed === true).length;
   const failedCount = checks.filter((c) => c.passed === false).length;
-  const pendingCount = checks.filter((c) => c.passed === null).length;
 
   const calculatedScore =
     overallScore ?? Math.round((passedCount / checks.length) * 100);
@@ -48,8 +47,8 @@ export function BestsellerQAScore({
   };
 
   const getScoreLabel = (score: number) => {
-    if (score >= 90) return "Bestseller Ready";
-    if (score >= 70) return "Good Quality";
+    if (score >= 90) return "Strong QA score";
+    if (score >= 70) return "Good QA score";
     if (score >= 50) return "Needs Improvement";
     return "Below Standard";
   };
@@ -122,6 +121,10 @@ export function BestsellerQAScore({
         )}
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        This QA score evaluates bestseller-oriented drafting heuristics. It is not a sales forecast, publication certification, or ScrollLibrary Press Certified claim.
+      </p>
+
       {/* Detailed checks by category */}
       {showDetails && (
         <div className="space-y-3 pt-2 border-t border-border/50">
@@ -166,7 +169,8 @@ export function BestsellerQAScore({
   );
 }
 
-// Default checks for bestseller validation
+// Default checks for bestseller-oriented validation. These are drafting and
+// layout heuristics only; they do not confer publication or bestseller status.
 export const DEFAULT_BESTSELLER_CHECKS: QACheckItem[] = [
   // Structure
   { id: "opening_hook", label: "Opening hook present", passed: null, category: "structure" },
@@ -190,5 +194,5 @@ export const DEFAULT_BESTSELLER_CHECKS: QACheckItem[] = [
   { id: "no_markdown", label: "No markdown artifacts", passed: null, category: "format" },
   { id: "short_paragraphs", label: "Short paragraphs (2-5 lines)", passed: null, category: "format" },
   { id: "clean_formatting", label: "Clean formatting", passed: null, category: "format" },
-  { id: "publish_ready", label: "Publish-ready layout", passed: null, category: "format" },
+  { id: "publish_ready", label: "Layout checks passed", passed: null, category: "format" },
 ];
