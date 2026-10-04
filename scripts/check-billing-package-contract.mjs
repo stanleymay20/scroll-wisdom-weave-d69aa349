@@ -13,6 +13,8 @@ const orderCheckout = readFileSync("supabase/functions/create-billing-order-chec
 const orderCatalogue = readFileSync("supabase/functions/_shared/billing-order-catalogue.ts", "utf8");
 const catalogue = readFileSync("supabase/functions/_shared/stripe-catalogue.ts", "utf8");
 const serverPlans = readFileSync("supabase/functions/_shared/billing-plans.ts", "utf8");
+const gaReleaseFlags = readFileSync("supabase/functions/_shared/ga-release-flags.ts", "utf8");
+const voiceGate = readFileSync("supabase/functions/_shared/interactive-voice-gate.ts", "utf8");
 const generation = readFileSync("supabase/functions/generate-chapter/index.ts", "utf8");
 const images = readFileSync("supabase/functions/generate-image/index.ts", "utf8");
 const tts = readFileSync("supabase/functions/text-to-speech/index.ts", "utf8");
@@ -74,6 +76,13 @@ requireText(payoutSettlement, "list_creator_payout_candidates", "marketplace pay
 requireText(seller, "PAID_SALES_ENABLED = FEATURES.enableMarketplace", "seller wizard follows marketplace payout-ready gate");
 rejectText(seller, "PMF_MODE", "seller wizard still coupled to PMF mode");
 requireText(ownerControls, "isBookTypeReleasedForClient", "book-type mutation uses provider qualification helper");
+
+// Teams promises pooled organization usage and included seats, which are not
+// implied by general subscription-payment readiness. Keep checkout separately
+// fail-closed until that contract is qualified end to end.
+requireText(gaReleaseFlags, "GA_TEAMS_SUBSCRIPTION_ENABLED", "independent server Teams subscription switch");
+requireText(checkout, "teamsSubscriptionCheckoutEnabled()", "Teams checkout server gate");
+requireText(checkout, 'code: "teams_not_ga_ready"', "Teams checkout fails closed before E2E qualification");
 
 // Frontend and server limits must carry the same canonical numbers.
 for (const [needle, label] of [
@@ -152,7 +161,9 @@ requireText(generation, '"visual_credits"', "chapter figures use visual meter");
 requireText(images, '"visual_credits"', "image generation uses visual meter");
 requireText(tts, '"audio_units"', "TTS uses pooled audio meter");
 
-// Paid plan access continues to follow the shared Stripe status policy.
+// Paid plan access continues to follow the shared Stripe/local-subscription
+// authority. Cached profile.plan must never independently authorize paid voice
+// compute after a delayed or failed profile sync.
 requireText(stripeFields, "subscriptionStatusGrantsAccess", "shared access-status helper");
 requireText(stripeFields, 'status === "active" || status === "trialing"', "access-bearing Stripe states");
 requireText(stripeFields, "subscriptionStatusBlocksNewCheckout", "shared replacement-checkout helper");
@@ -162,5 +173,8 @@ requireText(checkout, "subscriptionStatusBlocksNewCheckout(subscription.status)"
 requireText(webhook, "subscriptionStatusGrantsAccess(status)", "webhook shared access policy");
 requireText(checkSubscription, "subscriptionStatusGrantsAccess(subscription.status)", "subscription verification shared access policy");
 requireText(webhook, "Failed renewal is entitlement-significant for both billing domains.", "failed-renewal convergence");
+requireText(voiceGate, '.from("subscriptions")', "voice quota resolves server subscription authority");
+requireText(voiceGate, "current_period_end", "voice quota rejects expired local subscription periods");
+rejectText(voiceGate, "profile?.plan", "voice quota falls back to cached profile plan");
 
-console.log("Billing package contract: PASS (commercial GA separated; economic ladder metered; tax-aware checkout fail-closed)");
+console.log("Billing package contract: PASS (commercial GA separated; Teams fail-closed; authoritative entitlements; economic ladder metered; tax-aware checkout)");
