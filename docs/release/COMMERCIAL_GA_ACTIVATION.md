@@ -17,7 +17,11 @@ third-party paid book sales are open.
 Specialized authoring modes remain fail-closed until they pass the empirical provider
 qualification contract and appear in both the server and client allow-lists.
 
-## Live Stripe catalogue — economic-v1
+Content-quality claims are also independent from commercial activation. Opening paid
+checkout does not authorize near-10/10 or ScrollLibrary Press Certified claims unless
+the applicable tier/model route has passed the controlled empirical qualification doctrine.
+
+## Production Stripe catalogue — economic-v1
 
 These identifiers are public operational IDs, not credentials.
 
@@ -34,23 +38,31 @@ Teams is classified as cloud-based AIaaS business-use.
 
 ### One-time usage packs
 
-| SKU | Price |
-| --- | --- |
-| ai_text_250k | `price_1ULkF6JYFIBeCvefEBzHbLD8` ($15) |
-| visual_50 | `price_1ULkF8JYFIBeCvefbtz5HkGs` ($20) |
-| audio_60 | `price_1ULkFAJYFIBeCvefkmV2Gx84` ($15) |
+| SKU | Customer meaning | Price |
+| --- | --- | --- |
+| ai_text_250k | +250k AI-generated words | `price_1ULkF6JYFIBeCvefEBzHbLD8` ($15) |
+| visual_50 | +50 AI-generated visual requests | `price_1ULkF8JYFIBeCvefbtz5HkGs` ($20) |
+| audio_60 | +60 standard narration minutes | `price_1ULkFAJYFIBeCvefkmV2Gx84` ($15) |
 
 ### ScrollLibrary Press publishing services
 
-| Service | Price |
-| --- | --- |
-| Single Edition | `price_1ULkFCJYFIBeCvefONqZ9EHX` ($49) |
-| Print + Digital | `price_1ULkFEJYFIBeCvef3BmMbdDi` ($99) |
-| Complete Edition | `price_1ULkFGJYFIBeCvef3RXVaOE2` ($149) |
-| Assisted Publishing Launch | `price_1ULkFIJYFIBeCvefbGw8qpDf` ($399) |
+| Service | Price ID | Price |
+| --- | --- | ---: |
+| Single Edition | `price_1ULkFCJYFIBeCvefONqZ9EHX` | $49 |
+| Print + Digital | **PROVISION NEW STRIPE PRICE BEFORE GA** | $89 |
+| Complete Edition | **PROVISION NEW STRIPE PRICE BEFORE GA** | $129 |
+| Assisted Publishing Launch | `price_1ULkFIJYFIBeCvefbGw8qpDf` | $399 |
+
+The former $99 Print + Digital and $149 Complete Edition price IDs are retired for new
+public checkout because those bundle prices exceeded the equivalent number of $49 Single
+Edition purchases. Do not reuse the historical IDs for the corrected catalogue.
 
 Payment for a publishing service never assigns an ISBN directly. ISBN allocation remains
 a downstream, format-specific, validation-gated publishing transaction.
+
+Assisted Publishing Launch must remain unavailable until the operational service contract
+in `ASSISTED_PUBLISHING_LAUNCH_SERVICE_SCOPE.md` has a staffed owner, response/turnaround
+targets and tracked fulfillment lifecycle.
 
 ## Required production environment
 
@@ -99,10 +111,14 @@ STRIPE_PRICE_ADDON_VISUAL_50=price_1ULkF8JYFIBeCvefbtz5HkGs
 STRIPE_PRICE_ADDON_AUDIO_60=price_1ULkFAJYFIBeCvefkmV2Gx84
 
 STRIPE_PRICE_PUBLISH_SINGLE_EDITION=price_1ULkFCJYFIBeCvefONqZ9EHX
-STRIPE_PRICE_PUBLISH_PRINT_DIGITAL=price_1ULkFEJYFIBeCvef3BmMbdDi
-STRIPE_PRICE_PUBLISH_COMPLETE_EDITION=price_1ULkFGJYFIBeCvef3RXVaOE2
+STRIPE_PRICE_PUBLISH_PRINT_DIGITAL=<NEW_ACTIVE_89_USD_PRICE_ID>
+STRIPE_PRICE_PUBLISH_COMPLETE_EDITION=<NEW_ACTIVE_129_USD_PRICE_ID>
 STRIPE_PRICE_PUBLISH_ASSISTED_LAUNCH=price_1ULkFIJYFIBeCvefbGw8qpDf
 ```
+
+The two placeholder publishing price IDs above are deliberate fail-closed release blockers.
+Do not enable publishing-service billing until active recurring/one-time Stripe objects have
+been created as applicable and checkout read-back proves product, amount, currency and status.
 
 Do not open specialized generation merely because commercial GA is open.
 
@@ -132,31 +148,35 @@ active tax registrations, so this gate remains blocked pending merchant tax/VAT 
 ## Production infrastructure gate
 
 The repository targets Supabase project `lrricdforqfkaaciammv`.
+Production Supabase deployment/configuration is controlled through Lovable; do not bypass
+that control plane with direct production mutations.
 
 Do not turn on commercial browser flags until:
 1. production migrations are confirmed applied,
-2. billing Edge Functions are deployed from the exact release head,
-3. the Stripe catalogue variables above are installed,
+2. billing Edge Functions are deployed from the exact release head through Lovable,
+3. the Stripe catalogue variables above are installed with real matching active prices,
 4. Stripe webhook secrets and GA switches are verified,
 5. the production project passes database/Edge/payment lifecycle smoke tests.
 
 ## Final activation order
 
 1. Green exact-head repository CI.
-2. Deploy migrations + Edge Functions to production Supabase.
-3. Install Stripe catalogue environment variables.
-4. Configure/verify merchant tax registrations.
-5. Run live-catalogue checkout in a non-charge test path and webhook read-back.
-6. Set server GA payment/publication switches; keep marketplace payment switch false.
-7. Set `VITE_COMMERCIAL_GA_ENABLED=true` and redeploy from exact main.
-8. Verify production pricing, checkout, entitlements, exports, publishing, refunds,
+2. Provision the corrected $89 and $129 publishing-service Stripe prices.
+3. Through Lovable, deploy migrations + Edge Functions to production Supabase.
+4. Through the Lovable-controlled runtime, install/verify Stripe catalogue environment variables.
+5. Configure/verify merchant tax registrations.
+6. Run live-catalogue checkout in a non-charge test path and webhook read-back.
+7. Set server GA payment/publication switches only for proven domains; keep marketplace payment switch false.
+8. Set `VITE_COMMERCIAL_GA_ENABLED=true` and redeploy from exact main.
+9. Verify production pricing, checkout, entitlements, usage units, exports, publishing, refunds,
    and Teams.
-9. Verify creator payout settlement against a real test Connect account, then enable
+10. Verify creator payout settlement against a real test Connect account, then enable
    `GA_MARKETPLACE_PAYMENTS_ENABLED=true`, `GA_MARKETPLACE_PAYOUTS_ENABLED=true`,
    and `VITE_MARKETPLACE_GA_ENABLED=true`; verify paid storefront sales and payout
    settlement end to end.
-10. Release specialized book types only after provider qualification evidence.
-
+11. Release specialized book types only after provider qualification evidence.
+12. Activate stronger near-10/Press Certified marketing only after the corresponding
+   tier/model empirical quality campaign passes.
 
 ## Creator marketplace payout gate
 
