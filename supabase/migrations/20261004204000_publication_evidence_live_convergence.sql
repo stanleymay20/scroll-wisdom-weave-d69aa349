@@ -1,0 +1,77 @@
+-- Forward convergence for both ScrollLibrary database lineages.
+-- Fresh databases persist books.category as public.book_category; the long-lived
+-- Lovable-controlled production database persists it as text. Evidence governance
+-- must be identical in both cases and must never require converting live rows.
+
+DO $$
+DECLARE
+  v_data_type text;
+  v_udt_schema text;
+  v_udt_name text;
+BEGIN
+  SELECT data_type, udt_schema, udt_name
+    INTO v_data_type, v_udt_schema, v_udt_name
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'books'
+    AND column_name = 'category';
+
+  IF v_data_type IS NULL THEN
+    RAISE EXCEPTION 'books.category missing';
+  END IF;
+
+  IF to_regtype('public.book_category') IS NOT NULL THEN
+    EXECUTE 'ALTER TYPE public.book_category ADD VALUE IF NOT EXISTS ''health''';
+    EXECUTE 'ALTER TYPE public.book_category ADD VALUE IF NOT EXISTS ''psychology''';
+  ELSIF NOT (v_data_type = 'text' AND v_udt_schema = 'pg_catalog' AND v_udt_name = 'text') THEN
+    RAISE EXCEPTION 'unsupported books.category type: %.%', v_udt_schema, v_udt_name;
+  END IF;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION public.book_requires_publication_evidence(p_book_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT COALESCE((
+    SELECT
+      b.category::text = ANY (ARRAY[
+        'theology','science','technology','medicine','health','psychology','law','history',
+        'philosophy','economics','finance','governance','african_studies','business'
+      ]::text[])
+      OR lower(COALESCE(b.book_type, '')) = ANY (
+        ARRAY['academic','technical','reference','professional']::text[]
+      )
+      OR (
+        lower(COALESCE(b.book_type, 'text')) <> ALL (
+          ARRAY['fiction','comic','children']::text[]
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM public.chapters c
+          WHERE c.book_id = b.id
+            AND COALESCE(c.content, '') ~* (
+              '(acquir(e|es|ed|ing)|acquisition|merg(e|es|ed|er)|' ||
+              'rais(e|es|ed|ing)|funding round|valu(e|es|ed|ation)|sold to|' ||
+              'bought by|partner(ed|ship)|announc(e|es|ed)|' ||
+              '(^|[^[:alnum:]_])([€£$][[:space:]]*[0-9]|[0-9]+([.,][0-9]+)?[[:space:]]*%|' ||
+              '20[0-9]{2}|§[[:space:]]*[0-9]+)|' ||
+              '(^|[^[:alnum:]_])(law|act|regulation|directive|statute|ordinance|' ||
+              'gdpr|ai act|data act|nis2|cyber resilience act|blue card|' ||
+              'minimum wage|share capital|legal requirement|required by law|' ||
+              'mandatory|prohibited|fine|penalty|threshold)([^[:alnum:]_]|$))'
+            )
+        )
+      )
+    FROM public.books b
+    WHERE b.id = p_book_id
+  ), false);
+$$;
+
+REVOKE ALL ON FUNCTION public.book_requires_publication_evidence(uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.book_requires_publication_evidence(uuid)
+  TO service_role;
