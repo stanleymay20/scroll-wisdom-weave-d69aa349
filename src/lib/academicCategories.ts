@@ -1,9 +1,11 @@
-// Academic categories that require references by default
+// Factual/academic categories that require references by default
 export const ACADEMIC_CATEGORIES = [
   'theology',
   'science',
   'technology',
   'medicine',
+  'health',
+  'psychology',
   'law',
   'history',
   'philosophy',

@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "generationMode": "standard_text",
+  "purpose": "Representative empirical corpus for ScrollLibrary Standard Text quality qualification. These are test briefs, not canned manuscript outputs.",
+  "policy": {
+    "minimumCompleteBooks": 5,
+    "minimumHumanReviewedPassingBooks": 3,
+    "chiefEditorOverallMinimum": 95,
+    "publishabilityMinimum": 98,
+    "publishabilityMaximumBlockers": 0,
+    "publishabilityMaximumWarnings": 0,
+    "humanReviewOverallMinimum": 9.5,
+    "humanReviewDimensionMinimum": 9.0,
+    "humanReviewMaximumCriticalIssues": 0
+  },
+  "samples": [
+    {
+      "id": "std-general-explanatory-01",
+      "title": "Why Complex Systems Fail Slowly Before They Fail Suddenly",
+      "category": "non_fiction",
+      "bookType": "text",
+      "language": "en",
+      "chapters": 8,
+      "targetWordsPerChapter": 2500,
+      "brief": "Explain hidden accumulation, feedback loops, normalization of deviance, resilience, leading indicators and recovery in complex systems for an educated general reader. Use concrete cross-domain examples but avoid pretending illustrative examples are empirical facts.",
+      "qualityPressures": [
+        "whole-book coherence",
+        "causal reasoning",
+        "non-formulaic prose",
+        "limited repetition",
+        "clear distinction between example and evidence"
+      ],
+      "evidenceExpectation": "dynamic_when_material_claims_present"
+    },
+    {
+      "id": "std-business-economics-01",
+      "title": "Pricing Power in the Age of AI",
+      "category": "business",
+      "bookType": "text",
+      "language": "en",
+      "chapters": 8,
+      "targetWordsPerChapter": 2500,
+      "brief": "A practical but rigorous book for founders explaining pricing power, willingness to pay, switching costs, marginal cost, value metrics, bundling and AI-era product economics. Material market, legal or quantitative claims must be traceable to current sources.",
+      "qualityPressures": [
+        "current quantitative claims",
+        "business evidence integrity",
+        "actionable frameworks without unsupported certainty",
+        "clear examples",
+        "avoid generic startup advice"
+      ],
+      "evidenceExpectation": "required"
+    },
+    {
+      "id": "std-history-governance-01",
+      "title": "How Administrative States Learn",
+      "category": "history",
+      "bookType": "text",
+      "language": "en",
+      "chapters": 8,
+      "targetWordsPerChapter": 2500,
+      "brief": "Compare how public institutions across different periods learned from crises, built administrative capacity and sometimes institutionalized failure. Keep chronology, actors and causal claims precise. Do not invent quotations or historical details.",
+      "qualityPressures": [
+        "date and event accuracy",
+        "historical causality",
+        "counterarguments",
+        "source traceability",
+        "avoid presentist overclaiming"
+      ],
+      "evidenceExpectation": "required"
+    },
+    {
+      "id": "std-technical-software-01",
+      "title": "Reliable AI Agents in Production",
+      "category": "technology",
+      "bookType": "text",
+      "language": "en",
+      "chapters": 8,
+      "targetWordsPerChapter": 2500,
+      "brief": "Teach experienced developers how to design reliable production AI agents: budgets, termination conditions, tool contracts, idempotency, queues, retries, evaluation, observability, sandboxing and human escalation. Include useful code that is internally consistent and suitable for technical audit.",
+      "qualityPressures": [
+        "technical correctness",
+        "executable code integrity",
+        "architecture reasoning",
+        "version-sensitive claims",
+        "render-safe code and diagrams"
+      ],
+      "evidenceExpectation": "required",
+      "technicalCodeAudit": true
+    },
+    {
+      "id": "std-narrative-nonfiction-01",
+      "title": "The Invisible Decisions That Shape a Life",
+      "category": "non_fiction",
+      "bookType": "text",
+      "language": "en",
+      "chapters": 10,
+      "targetWordsPerChapter": 2500,
+      "brief": "Narrative non-fiction about path dependence, small choices and delayed consequences. Use a strong human voice, recurring motifs and concrete scenes without fabricating real people, quotations or factual anecdotes. The manuscript should feel authored rather than templated.",
+      "qualityPressures": [
+        "voice consistency",
+        "narrative pacing",
+        "AI-detectability risk",
+        "avoid symmetrical chapter templates",
+        "avoid filler and repetitive conclusions"
+      ],
+      "evidenceExpectation": "dynamic_when_material_claims_present"
+    }
+  ]
+}

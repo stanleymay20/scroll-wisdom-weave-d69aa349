@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "corpusSampleId": "replace-with-corpus-sample-id",
+  "tierRoute": "free|creator|pro|teams",
+  "reviewedAt": "YYYY-MM-DD",
+  "books": {
+    "replace-with-generated-book-uuid": {
+      "humanReview": {
+        "reviewer": "Independent Reviewer Name",
+        "criticalIssues": 0,
+        "dimensions": {
+          "contentIntegrity": 0,
+          "coherence": 0,
+          "typeFidelity": 0,
+          "readerValue": 0,
+          "editorialPolish": 0
+        }
+      },
+      "reviewNotes": [
+        {
+          "dimension": "contentIntegrity|coherence|typeFidelity|readerValue|editorialPolish",
+          "chapter": 1,
+          "excerpt": "Short representative excerpt or location reference",
+          "comment": "Evidence supporting the review score"
+        }
+      ]
+    }
+  }
+}

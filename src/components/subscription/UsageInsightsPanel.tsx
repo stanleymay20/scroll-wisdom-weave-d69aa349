@@ -90,18 +90,20 @@ export function UsageInsightsPanel() {
             />
             <UsageRow
               icon={ImageIcon}
-              label="Visual credits"
+              label="AI-generated visuals"
               used={snapshot.visualCreditsUsed}
               limit={snapshot.visualCreditsLimit}
+              unit="requests"
             />
             <UsageRow
               icon={Mic}
-              label="Audio credits"
+              label="Audio allowance"
               used={snapshot.audioCreditsUsed}
               limit={snapshot.audioCreditsLimit}
+              unit="narration-min eq."
             />
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Standard narration uses 1 audio credit per minute. Interactive voice consumes the same pooled budget at a higher weighted rate.
+              One audio allowance unit equals about one standard narration minute. Interactive voice, when enabled, consumes the same pool at a higher weighted rate.
             </p>
             <div className="flex items-center justify-end pt-2">
               <Button size="sm" variant="outline" onClick={() => navigate("/pricing")}>
