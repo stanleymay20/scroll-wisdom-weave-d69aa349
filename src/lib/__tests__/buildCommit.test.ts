@@ -2,7 +2,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { commitFromGitDirectory, resolveBuildCommit, requireReleaseCommit } from "../../../scripts/build-commit.mjs";
+import {
+  commitFromGitDirectory,
+  resolveBuildCommit,
+  requireReleaseCommit,
+  resolveProductionBuildCommit,
+} from "../../../scripts/build-commit.mjs";
 
 const A = "a".repeat(40);
 const B = "b".repeat(40);
@@ -99,5 +104,22 @@ describe("resolveBuildCommit", () => {
 
   it("says unavailable instead of inventing an identity", () => {
     expect(resolveBuildCommit({}, repo({}))).toEqual({ commit: null, source: "unavailable" });
+  });
+
+  it("lets a hosted production rebuild emit an honest null identity when Git metadata is absent", () => {
+    expect(resolveProductionBuildCommit({}, repo({}))).toEqual({ commit: null, source: "unavailable" });
+  });
+
+  it("uses checkout Git identity for hosted production when the builder retains .git", () => {
+    expect(resolveProductionBuildCommit({}, withGit())).toEqual({ commit: B, source: "git" });
+  });
+
+  it("keeps trusted release declarations strict", () => {
+    expect(resolveProductionBuildCommit({ RELEASE_COMMIT_SHA: B }, withGit())).toEqual({
+      commit: B,
+      source: "RELEASE_COMMIT_SHA",
+    });
+    expect(() => resolveProductionBuildCommit({ RELEASE_COMMIT_SHA: A }, withGit())).toThrow(/does not match/);
+    expect(() => resolveProductionBuildCommit({ GITHUB_SHA: "not-a-sha" }, repo({}))).toThrow(/exact 40-character/);
   });
 });

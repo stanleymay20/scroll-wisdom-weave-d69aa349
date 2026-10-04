@@ -1,5 +1,6 @@
 name: GA Production Verification
 
+# Release identity must be proven from exact source, including hosted builds that omit Git metadata.
 on:
   workflow_dispatch:
     inputs:
@@ -64,33 +65,7 @@ jobs:
           RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
           EXPECTED_FINGERPRINT: ${{ steps.source.outputs.fingerprint }}
           EXPECTED_FILE_COUNT: ${{ steps.source.outputs.file_count }}
-        run: |
-          node --input-type=module <<'NODE'
-          import { readFileSync } from "node:fs";
-
-          const live = JSON.parse(readFileSync("live-release.json", "utf8"));
-          const fail = (message) => {
-            console.error("::error::" + message);
-            process.exitCode = 1;
-          };
-
-          if (live.sourceFingerprint !== process.env.EXPECTED_FINGERPRINT) {
-            fail(`Production source fingerprint mismatch. expected=${process.env.EXPECTED_FINGERPRINT} actual=${live.sourceFingerprint ?? "missing"}`);
-          }
-          if (Number(live.sourceFingerprintFiles) !== Number(process.env.EXPECTED_FILE_COUNT)) {
-            fail(`Production source fingerprint file count mismatch. expected=${process.env.EXPECTED_FILE_COUNT} actual=${live.sourceFingerprintFiles ?? "missing"}`);
-          }
-          if (live.commit !== process.env.RELEASE_SHA) {
-            fail(`Production names a different commit. expected=${process.env.RELEASE_SHA} actual=${live.commit}`);
-          }
-          if (!live.buildTime || Number.isNaN(Date.parse(live.buildTime))) {
-            fail("Production release.json has no valid buildTime.");
-          }
-
-          if (!process.exitCode) {
-            console.log(`Production source matches release ${process.env.RELEASE_SHA} via ${live.commit ? "commit + fingerprint" : "source fingerprint"}.`);
-          }
-          NODE
+        run: node scripts/verify-release-identity.mjs live-release.json
 
       - name: Require exact-head release workflows
         env:
