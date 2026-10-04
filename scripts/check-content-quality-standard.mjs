@@ -110,7 +110,7 @@ for (const phrase of [
 for (const forbidden of ['"Publication Ready"', '> Publication Ready<']) {
   if (typographyReport.includes(forbidden)) fail(`typography-only validator regained publication claim: ${forbidden}`);
 }
-for (const forbidden of ['"Bestseller Ready"', '"Publish-ready layout"']) {
+for (const forbidden of ['"Bestseller Ready"', '"Publish-ready layout"', 'label: "Layout checks passed"']) {
   if (bestsellerQa.includes(forbidden)) fail(`unqualified bestseller QA claim returned: ${forbidden}`);
 }
 for (const required of [
@@ -122,7 +122,7 @@ for (const required of [
 for (const required of [
   'Strong QA score',
   'not a sales forecast, publication certification, or ScrollLibrary Press Certified claim',
-  'Layout checks passed',
+  'Layout quality checks',
 ]) {
   if (!bestsellerQa.includes(required)) fail(`bestseller QA truthfulness copy missing: ${required}`);
 }
