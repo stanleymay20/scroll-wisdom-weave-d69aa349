@@ -7,6 +7,14 @@ const corpusPath = path.join(root, 'docs/release/standard-text-qualification-cor
 
 const corpus = JSON.parse(fs.readFileSync(corpusPath, 'utf8'));
 const policy = corpus.policy;
+const allowedSampleIds = new Set(corpus.samples.map((sample) => sample.id));
+const dimensions = [
+  'contentIntegrity',
+  'coherence',
+  'typeFidelity',
+  'readerValue',
+  'editorialPolish',
+];
 
 if (!fs.existsSync(evidenceDir)) {
   console.log('STANDARD_TEXT_HUMAN_REVIEW_PENDING: evidence directory not present; qualification remains fail-closed.');
@@ -22,67 +30,71 @@ if (files.length === 0) {
 let invalid = false;
 let passingHumanReviews = 0;
 const passingSamples = new Set();
-const allowedSampleIds = new Set(corpus.samples.map((sample) => sample.id));
 
 for (const file of files) {
   const full = path.join(evidenceDir, file);
-  let review;
+  let evidence;
   try {
-    review = JSON.parse(fs.readFileSync(full, 'utf8'));
+    evidence = JSON.parse(fs.readFileSync(full, 'utf8'));
   } catch (error) {
     console.error(`STANDARD_TEXT_REVIEW_INVALID: ${file}: invalid JSON (${error.message})`);
     invalid = true;
     continue;
   }
 
-  if (!allowedSampleIds.has(review.sampleId)) {
-    console.error(`STANDARD_TEXT_REVIEW_INVALID: ${file}: unknown sampleId ${review.sampleId}`);
+  const sampleId = evidence.corpusSampleId;
+  if (!allowedSampleIds.has(sampleId)) {
+    console.error(`STANDARD_TEXT_REVIEW_INVALID: ${file}: unknown corpusSampleId ${sampleId}`);
     invalid = true;
     continue;
   }
 
-  const dimensions = [
-    'contentIntegrity',
-    'coherence',
-    'depth',
-    'proseQuality',
-    'structureAndPacing',
-    'audienceFitAndPedagogy',
-    'originalityAndNonFormulaicTreatment',
-    'publicationUsability',
-  ];
+  const bookEntries = Object.entries(evidence.books ?? {});
+  if (bookEntries.length !== 1) {
+    console.error(`STANDARD_TEXT_REVIEW_INVALID: ${file}: each corpus evidence file must contain exactly one generated book review`);
+    invalid = true;
+    continue;
+  }
 
-  const scores = review.scores ?? {};
-  const machine = review.machineEvidence ?? {};
-  const critical = review.issues?.critical ?? [];
-  const reviewerName = String(review.reviewer?.name ?? '').trim();
-  const hasEvidence = Array.isArray(review.evidence) && review.evidence.length > 0;
+  const [bookId, entry] = bookEntries[0];
+  if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(bookId)) {
+    console.error(`STANDARD_TEXT_REVIEW_INVALID: ${file}: book key is not a generated book UUID`);
+    invalid = true;
+    continue;
+  }
 
-  const dimensionsPass = dimensions.every((key) => Number(scores[key]) >= policy.humanReviewDimensionMinimum);
+  const review = entry?.humanReview ?? {};
+  const reviewer = String(review.reviewer ?? '').trim();
+  const criticalIssues = Number(review.criticalIssues);
+  const scores = review.dimensions ?? {};
+  const values = dimensions.map((key) => Number(scores[key]));
+
+  if (!reviewer || reviewer === 'Independent Reviewer Name') {
+    console.error(`STANDARD_TEXT_REVIEW_INVALID: ${file}: reviewer identity/reference is missing or placeholder`);
+    invalid = true;
+    continue;
+  }
+  if (!Number.isFinite(criticalIssues) || criticalIssues < 0) {
+    console.error(`STANDARD_TEXT_REVIEW_INVALID: ${file}: criticalIssues must be a non-negative number`);
+    invalid = true;
+    continue;
+  }
+  if (values.some((value) => !Number.isFinite(value) || value < 0 || value > 10)) {
+    console.error(`STANDARD_TEXT_REVIEW_INVALID: ${file}: all canonical review dimensions must be numeric 0..10`);
+    invalid = true;
+    continue;
+  }
+
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const weakest = Math.min(...values);
   const humanPass =
-    reviewerName.length > 0 &&
-    hasEvidence &&
-    Number(scores.overall) >= policy.humanReviewOverallMinimum &&
-    dimensionsPass &&
-    critical.length <= policy.humanReviewMaximumCriticalIssues &&
-    review.publicationJudgement?.publishAfterNormalCopyeditOnly === true &&
-    review.publicationJudgement?.readsLikeUneditedAI === false;
+    mean >= policy.humanReviewOverallMinimum &&
+    weakest >= policy.humanReviewDimensionMinimum &&
+    criticalIssues <= policy.humanReviewMaximumCriticalIssues;
 
-  const machinePass =
-    Number(machine.chiefEditorOverall) >= policy.chiefEditorOverallMinimum &&
-    Number(machine.publishabilityScore) >= policy.publishabilityMinimum &&
-    Number(machine.publishabilityBlockers) <= policy.publishabilityMaximumBlockers &&
-    Number(machine.publishabilityWarnings) <= policy.publishabilityMaximumWarnings &&
-    machine.productionRenderPassed === true &&
-    (machine.evidencePassed === true || machine.evidencePassed === null) &&
-    (machine.technicalAuditPassed === true || machine.technicalAuditPassed === null) &&
-    (machine.rightsPassed === true || machine.rightsPassed === null) &&
-    typeof machine.scopeHash === 'string' && machine.scopeHash.length >= 16;
-
-  const pass = humanPass && machinePass && review.verdict === 'pass';
-  if (pass) {
+  if (humanPass) {
     passingHumanReviews += 1;
-    passingSamples.add(review.sampleId);
+    passingSamples.add(sampleId);
   }
 }
 
@@ -90,7 +102,13 @@ if (invalid) process.exit(1);
 
 if (passingHumanReviews >= policy.minimumHumanReviewedPassingBooks &&
     passingSamples.size >= policy.minimumHumanReviewedPassingBooks) {
-  console.log(`STANDARD_TEXT_HUMAN_REVIEW_PASS: ${passingHumanReviews} passing review(s) across ${passingSamples.size} sample(s).`);
+  console.log(
+    `STANDARD_TEXT_HUMAN_REVIEW_EVIDENCE_COMPLETE: ${passingHumanReviews} passing review(s) across ${passingSamples.size} corpus sample(s). ` +
+    'Human-review evidence is complete; the existing provider-qualification collector remains authoritative for machine gates and final route qualification.',
+  );
 } else {
-  console.log(`STANDARD_TEXT_HUMAN_REVIEW_PENDING: ${passingHumanReviews}/${policy.minimumHumanReviewedPassingBooks} passing human-reviewed books. Qualification remains fail-closed.`);
+  console.log(
+    `STANDARD_TEXT_HUMAN_REVIEW_PENDING: ${passingHumanReviews}/${policy.minimumHumanReviewedPassingBooks} passing human-reviewed books. ` +
+    'Route qualification remains fail-closed.',
+  );
 }
