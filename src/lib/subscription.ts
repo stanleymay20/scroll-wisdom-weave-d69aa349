@@ -154,16 +154,16 @@ export const PUBLISHING_SERVICE_PACKAGES = {
   },
   print_digital: {
     name: 'Print + Digital',
-    price: 99,
-    priceCents: 9900,
+    price: 89,
+    priceCents: 8900,
     maxIsbns: 2,
     formats: 2,
     description: 'Two publication formats with format-specific identifiers, metadata, and production validation.',
   },
   complete_edition: {
     name: 'Complete Edition',
-    price: 149,
-    priceCents: 14900,
+    price: 129,
+    priceCents: 12900,
     maxIsbns: 3,
     formats: 3,
     description: 'Paperback, hardcover, and EPUB publication records with up to three eligible ScrollLibrary Press ISBNs.',
@@ -174,7 +174,7 @@ export const PUBLISHING_SERVICE_PACKAGES = {
     priceCents: 39900,
     maxIsbns: 3,
     formats: 3,
-    description: 'Human-assisted publishing setup, metadata QA, distribution preparation, and launch support. Starts at $399.',
+    description: 'Human-assisted publishing setup, metadata QA, distribution preparation, and launch support under the published service scope.',
   },
 } as const;
 
@@ -187,17 +187,18 @@ export const USAGE_ADDONS = {
     billingMode: 'one_time',
   },
   visual_50: {
-    name: '+50 visual credits',
+    name: '+50 AI-generated visuals',
     price: 20,
     priceCents: 2000,
     visualCredits: 50,
     billingMode: 'one_time',
   },
   audio_60: {
-    name: '+60 audio credits',
+    name: '+60 narration minutes',
     price: 15,
     priceCents: 1500,
-    audioCredits: 60,
+    audioCredits: 60, // compatibility: backend pool still uses audio credits/units
+    narrationMinutes: 60,
     billingMode: 'one_time',
   },
   team_seat: {
