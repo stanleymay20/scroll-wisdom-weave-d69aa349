@@ -2766,6 +2766,45 @@ export type Database = {
         }
         Relationships: []
       }
+      creator_payout_allocations: {
+        Row: {
+          allocated_cents: number
+          created_at: string
+          id: string
+          ledger_entry_id: string
+          payout_transfer_id: string
+        }
+        Insert: {
+          allocated_cents: number
+          created_at?: string
+          id?: string
+          ledger_entry_id: string
+          payout_transfer_id: string
+        }
+        Update: {
+          allocated_cents?: number
+          created_at?: string
+          id?: string
+          ledger_entry_id?: string
+          payout_transfer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_allocations_ledger_entry_id_fkey"
+            columns: ["ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "creator_earnings_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_payout_allocations_payout_transfer_id_fkey"
+            columns: ["payout_transfer_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_transfers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creator_payout_profiles: {
         Row: {
           country_code: string | null
@@ -2802,6 +2841,69 @@ export type Database = {
           tax_form_status?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      creator_payout_transfers: {
+        Row: {
+          amount_cents: number
+          balance_snapshot: Json
+          created_at: string
+          creator_user_id: string
+          currency: string
+          failed_at: string | null
+          failure_code: string | null
+          failure_message: string | null
+          id: string
+          idempotency_key: string
+          metadata: Json
+          reserved_at: string
+          reversed_at: string | null
+          status: string
+          stripe_connect_account_id: string
+          stripe_transfer_id: string | null
+          transferred_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          balance_snapshot?: Json
+          created_at?: string
+          creator_user_id: string
+          currency: string
+          failed_at?: string | null
+          failure_code?: string | null
+          failure_message?: string | null
+          id?: string
+          idempotency_key: string
+          metadata?: Json
+          reserved_at?: string
+          reversed_at?: string | null
+          status?: string
+          stripe_connect_account_id: string
+          stripe_transfer_id?: string | null
+          transferred_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          balance_snapshot?: Json
+          created_at?: string
+          creator_user_id?: string
+          currency?: string
+          failed_at?: string | null
+          failure_code?: string | null
+          failure_message?: string | null
+          id?: string
+          idempotency_key?: string
+          metadata?: Json
+          reserved_at?: string
+          reversed_at?: string | null
+          status?: string
+          stripe_connect_account_id?: string
+          stripe_transfer_id?: string | null
+          transferred_at?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -6793,6 +6895,12 @@ export type Database = {
           retry_after_seconds: number
         }[]
       }
+      creator_payout_entry_is_eligible: {
+        Args: {
+          _entry: Database["public"]["Tables"]["creator_earnings_ledger"]["Row"]
+        }
+        Returns: boolean
+      }
       ensure_individual_rights_holder: {
         Args: { _display_name?: string; _user_id: string }
         Returns: string
@@ -6806,6 +6914,16 @@ export type Database = {
       get_creator_channel_recommendations: {
         Args: { _user_id: string; _window_days?: number }
         Returns: Json
+      }
+      get_creator_payout_balance: {
+        Args: { _creator_user_id: string }
+        Returns: {
+          currency: string
+          eligible_cents: number
+          payable_cents: number
+          reserved_cents: number
+          transferred_cents: number
+        }[]
       }
       get_creator_publishing_analytics: {
         Args: { _user_id: string; _window_days?: number }
@@ -6942,6 +7060,15 @@ export type Database = {
         Returns: boolean
       }
       is_valid_isbn13: { Args: { p_value: string }; Returns: boolean }
+      list_creator_payout_candidates: {
+        Args: { _limit?: number; _minimum_cents?: number }
+        Returns: {
+          creator_user_id: string
+          currency: string
+          payable_cents: number
+          reserved_cents: number
+        }[]
+      }
       log_audit_event: {
         Args: {
           _actor_id?: string
@@ -6953,6 +7080,18 @@ export type Database = {
           _severity?: string
         }
         Returns: string
+      }
+      mark_creator_payout_failed: {
+        Args: {
+          _failure_code: string
+          _failure_message: string
+          _payout_transfer_id: string
+        }
+        Returns: Json
+      }
+      mark_creator_payout_transferred: {
+        Args: { _payout_transfer_id: string; _stripe_transfer_id: string }
+        Returns: Json
       }
       normalize_isbn13: { Args: { p_value: string }; Returns: string }
       notify_followers_on_schedule_release: {
@@ -6984,6 +7123,14 @@ export type Database = {
           books_used: number
           remaining_books: number
         }[]
+      }
+      reserve_creator_payout: {
+        Args: {
+          _creator_user_id: string
+          _currency: string
+          _minimum_cents?: number
+        }
+        Returns: Json
       }
       reserve_interactive_voice_seconds: {
         Args: {
