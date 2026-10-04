@@ -3,6 +3,8 @@ BEGIN;
 DO $policy$
 DECLARE
   v_business uuid;
+  v_health uuid;
+  v_psychology uuid;
   v_plain_text uuid;
   v_material_text uuid;
   v_material_workbook uuid;
@@ -11,6 +13,14 @@ BEGIN
   INSERT INTO public.books (title, category, book_type)
   VALUES ('Business evidence policy fixture', 'business', 'text')
   RETURNING id INTO v_business;
+
+  INSERT INTO public.books (title, category, book_type)
+  VALUES ('Health evidence policy fixture', 'health', 'text')
+  RETURNING id INTO v_health;
+
+  INSERT INTO public.books (title, category, book_type)
+  VALUES ('Psychology evidence policy fixture', 'psychology', 'text')
+  RETURNING id INTO v_psychology;
 
   INSERT INTO public.books (title, category, book_type)
   VALUES ('Plain creative text fixture', 'fiction', 'text')
@@ -57,6 +67,14 @@ BEGIN
 
   IF public.book_requires_publication_evidence(v_business) IS NOT TRUE THEN
     RAISE EXCEPTION 'business category must require publication evidence';
+  END IF;
+
+  IF public.book_requires_publication_evidence(v_health) IS NOT TRUE THEN
+    RAISE EXCEPTION 'health category must require publication evidence';
+  END IF;
+
+  IF public.book_requires_publication_evidence(v_psychology) IS NOT TRUE THEN
+    RAISE EXCEPTION 'psychology category must require publication evidence';
   END IF;
 
   IF public.book_requires_publication_evidence(v_plain_text) IS NOT FALSE THEN
