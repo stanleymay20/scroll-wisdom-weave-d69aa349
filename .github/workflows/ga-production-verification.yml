@@ -108,6 +108,7 @@ jobs:
             "EPUB Conformance"
             "Admin Financial Boundary"
             "Strict Null Ratchet"
+            "Storage Boundary Security"
           )
 
           for workflow in "${required[@]}"; do
