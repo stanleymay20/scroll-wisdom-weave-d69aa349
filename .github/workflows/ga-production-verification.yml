@@ -1,5 +1,6 @@
 name: GA Production Verification
 
+# Release identity must be proven from exact source, including hosted builds that omit Git metadata.
 on:
   workflow_dispatch:
     inputs:
