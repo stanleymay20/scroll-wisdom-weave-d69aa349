@@ -11,7 +11,7 @@ Production control plane: Lovable. Canonical source of truth: GitHub `main`.
 3. Never bypass Lovable with ad-hoc production Supabase mutations during normal recovery.
 4. Prefer a forward convergence migration to destructive history repair.
 5. No release is considered recovered until source identity, live schema semantics, auth/RLS and the affected commercial lifecycle are reverified.
-6. External money movement must be disabled first when the integrity of billing, marketplace or payout state is uncertain.
+6. External money movement must be contained first when the integrity of billing, marketplace or payout state is uncertain; feature flags are domain gates, not a universal Stripe freeze.
 7. Immutable financial/ISBN/evidence ledgers must not be rewritten to make a recovery look clean.
 
 ## Release identity
@@ -21,14 +21,14 @@ For every production release record:
 - exact canonical `main` SHA;
 - merge/PR that introduced the release;
 - Lovable project source SHA;
-- production release identity/fingerprint when available;
+- production release identity/fingerprint;
 - database semantic-verifier result;
 - required E2E/Stripe/security evidence;
 - operator and timestamp.
 
-If GitHub `main`, Lovable source and deployed production identity do not agree, stop the release and classify it as source drift.
+GitHub `main` and Lovable project source must resolve to the same intended SHA. For the deployed hosted build, require the exact commit SHA when release metadata exposes it. When Lovable strips Git metadata and the release reports commit identity as unavailable, use the repository's established release-identity verifier: the hosted source fingerprint and file count must match the fingerprint computed for the intended canonical SHA. If neither exact-commit nor accepted fingerprint proof matches, stop the release and classify it as source drift.
 
-## Emergency kill switches
+## Emergency commercial containment
 
 When a payment or marketplace incident is suspected, close the smallest affected domain before debugging.
 
@@ -43,15 +43,18 @@ Keep or set false as appropriate through the Lovable-controlled environment:
 
 The exact flag names and catalogue environment values must be read from the release candidate at the incident SHA before changing configuration. Do not assume an old runbook copy is authoritative.
 
-A kill switch prevents new external writes. It does not by itself reconcile already-created Stripe payments, transfers, refunds or entitlements.
+These gates stop the application paths that explicitly enforce them; they are **not** a global Stripe write lock. In particular, separately inspect and contain ungated Stripe-writing operations such as administrative refund tooling and customer-portal session creation when the incident requires a broader freeze. If total external-write containment is required, enumerate every reachable Stripe-writing endpoint for the incident SHA, disable or operationally restrict the affected routes/actions through the supported control plane, and verify the result before claiming that Stripe writes are frozen.
+
+Containment does not reconcile already-created Stripe payments, transfers, refunds, portal actions or entitlements.
 
 ## Database incident procedure
 
-### 1. Freeze the affected surface
+### 1. Contain the affected surface
 
-- disable the relevant external-write feature flag;
+- disable the relevant gated external-write surface;
+- if the incident requires broader Stripe containment, separately account for ungated refund/portal/administrative write paths as described above;
 - preserve logs, correlation IDs, Stripe IDs, billing order IDs and affected user/book IDs;
-- do not delete the failed/ambiguous records;
+- do not delete failed/ambiguous records;
 - record the current production migration ledger and semantic state read-only.
 
 ### 2. Diagnose semantic state
@@ -109,7 +112,7 @@ The safe rollback is source-controlled and forward-auditable.
 5. run exact-head CI/security/real E2E;
 6. merge the green rollback/correction into `main`;
 7. deploy through Lovable from the new canonical `main` SHA;
-8. verify live source identity and `scripts/verify-commercial-live-schema.sql`;
+8. verify hosted release identity (exact commit when available, otherwise the accepted fingerprint/file-count proof) and `scripts/verify-commercial-live-schema.sql`;
 9. exercise the incident-specific production smoke path.
 
 ## Frontend rollback
@@ -121,7 +124,7 @@ For a frontend-only regression:
 - run exact-head CI/build/E2E;
 - merge to `main`;
 - redeploy through Lovable;
-- verify release identity and the affected browser path.
+- verify hosted release identity and the affected browser path.
 
 A client-only rollback must never be used as the sole protection for billing, entitlement, RLS or financial authority defects.
 
@@ -129,14 +132,14 @@ A client-only rollback must never be used as the sole protection for billing, en
 
 If payment outcome is ambiguous:
 
-- stop new writes in the affected commercial domain if duplication is possible;
+- contain new writes in the affected commercial domain if duplication is possible, while remembering that GA flags do not automatically disable every Stripe-writing route;
 - preserve Stripe event/payment/subscription/transfer IDs and ScrollLibrary order/reservation IDs;
 - use idempotent server reconciliation paths, not manual row edits;
 - replay only through the canonical webhook/reconciliation mechanism;
 - distinguish definitive external rejection from timeout/unknown outcome;
 - do not release ledger reservations where the external processor may already have moved money;
 - reconcile refunds/disputes/transfers against the authoritative internal order/settlement record;
-- restore feature flags only after duplicate/replay and entitlement read-back tests pass.
+- restore affected routes/flags only after duplicate/replay and entitlement read-back tests pass.
 
 Creator payouts remain independently fail-closed until their Stripe Connect reconciliation contract is proven.
 
@@ -159,7 +162,7 @@ Creator payouts remain independently fail-closed until their Stripe Connect reco
 
 At minimum, prove:
 
-1. GitHub `main` SHA = Lovable source SHA = intended deployed release identity;
+1. GitHub `main` SHA = Lovable project source SHA, and the deployed hosted release proves that intended source either by exact commit identity or by the accepted fingerprint + file-count comparison when commit metadata is unavailable;
 2. `scripts/verify-commercial-live-schema.sql` passes live;
 3. signup/signin/session refresh and RLS smoke pass;
 4. the affected billing/entitlement lifecycle passes in Stripe test mode when payments are involved;
@@ -196,7 +199,7 @@ This runbook is documentation until rehearsed. Before full commercial GA, record
 
 - one isolated database restore or equivalent recovery rehearsal supported by the control plane;
 - one source/Edge/frontend rollback rehearsal using Git revert -> exact-head CI -> Lovable redeploy;
-- one kill-switch + recovery exercise for a commercial domain;
+- one commercial containment + recovery exercise that explicitly distinguishes gated surfaces from any remaining ungated Stripe-write paths;
 - successful post-recovery semantic verifier and auth/RLS smoke.
 
 After those rehearsals, update the release evidence pack and issue #139 with dates, SHAs and non-secret evidence references.
