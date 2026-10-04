@@ -1,27 +1,33 @@
--- Converge the persisted category vocabulary with the public authoring surface,
--- then extend factual-domain publication evidence governance to Health and Psychology.
---
--- ScrollLibrary has two legitimate historical database shapes:
---   1) fresh/rebuilt databases where books.category is public.book_category;
---   2) the long-lived Lovable-controlled production database where books.category is text.
---
--- Never assume the enum exists. If it does, extend it. If it does not, leave the
--- text-backed production column untouched. The evidence function compares through
--- ::text and therefore works correctly against both shapes.
+-- Forward convergence for both ScrollLibrary database lineages.
+-- Fresh databases persist books.category as public.book_category; the long-lived
+-- Lovable-controlled production database persists it as text. Evidence governance
+-- must be identical in both cases and must never require converting live rows.
 
 DO $$
+DECLARE
+  v_data_type text;
+  v_udt_schema text;
+  v_udt_name text;
 BEGIN
+  SELECT data_type, udt_schema, udt_name
+    INTO v_data_type, v_udt_schema, v_udt_name
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'books'
+    AND column_name = 'category';
+
+  IF v_data_type IS NULL THEN
+    RAISE EXCEPTION 'books.category missing';
+  END IF;
+
   IF to_regtype('public.book_category') IS NOT NULL THEN
     EXECUTE 'ALTER TYPE public.book_category ADD VALUE IF NOT EXISTS ''health''';
     EXECUTE 'ALTER TYPE public.book_category ADD VALUE IF NOT EXISTS ''psychology''';
+  ELSIF NOT (v_data_type = 'text' AND v_udt_schema = 'pg_catalog' AND v_udt_name = 'text') THEN
+    RAISE EXCEPTION 'unsupported books.category type: %.%', v_udt_schema, v_udt_name;
   END IF;
 END
 $$;
-
--- The dynamic material-claim policy catches many quantified/legal claims, but
--- medically/psychologically relevant prose can make consequential claims without
--- a date, percentage or currency cue. Preserve the existing dynamic-material-claim
--- semantics and add the newly public governed categories.
 
 CREATE OR REPLACE FUNCTION public.book_requires_publication_evidence(p_book_id uuid)
 RETURNS boolean
@@ -34,8 +40,7 @@ AS $$
     SELECT
       b.category::text = ANY (ARRAY[
         'theology','science','technology','medicine','health','psychology','law','history',
-        'philosophy','economics','finance','governance','african_studies',
-        'business'
+        'philosophy','economics','finance','governance','african_studies','business'
       ]::text[])
       OR lower(COALESCE(b.book_type, '')) = ANY (
         ARRAY['academic','technical','reference','professional']::text[]
