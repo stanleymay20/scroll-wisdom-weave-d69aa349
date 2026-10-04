@@ -24,6 +24,7 @@ Treat these as blockers until the live semantic verifier passes:
 - subsequent Lovable `publish_migration_from_pg_dump` entries explicitly dropped `creator_payout_transfers`, `creator_payout_allocations`, and all settlement RPCs;
 - the Sept. 30 billing-authority migrations are absent live: `billing_usage_monthly`, `billing_orders`, refund authority and their server RPCs do not exist;
 - browser roles can execute multiple server/maintenance-only SECURITY DEFINER RPCs because the Sept. 30 privilege convergence is absent live;
+- `publishing_certificates` is browser-mutable live: `anon`/`authenticated` still have UPDATE/DELETE table privileges and the historical owner `FOR ALL` policy remains;
 - `study-music` retained an INSERT policy granted to `PUBLIC` instead of `service_role`;
 - live `books.category` is `text`, while fresh databases use `public.book_category`;
 - the live `book_requires_publication_evidence(uuid)` function is older than the Health/Psychology/Business + dynamic material-claim contract;
@@ -36,7 +37,7 @@ The canonical repair is forward-convergent. Do not delete/rewrite production mig
 Through Lovable only:
 
 1. confirm the Lovable source is the exact approved `main` SHA;
-2. apply/deploy all new forward convergence migrations from that `main`, including payout, evidence, storage, billing-authority and internal-RPC privilege convergence;
+2. apply/deploy all new forward convergence migrations from that `main`, including payout, evidence, storage, billing-authority, certificate-authority and internal-RPC privilege convergence;
 3. ensure the legacy-safe `20261004190000_health_psychology_publication_evidence.sql` no longer assumes the enum exists;
 4. deploy required Edge Functions from the same source head;
 5. install and validate billing catalogue environment values for only the plans/SKUs being offered;
@@ -63,11 +64,12 @@ The verifier proves actual live semantics rather than migration names. It checks
 - all payout reservation/balance/candidate/success/failure RPCs physically exist;
 - authenticated/anonymous users cannot read payout internals or execute settlement RPCs;
 - internal SECURITY DEFINER maintenance RPCs are not browser-callable;
+- browser roles cannot INSERT/UPDATE/DELETE `publishing_certificates`, no browser/public write policy remains, and `service_role` retains mutation authority;
 - `study-music` write access is service-role only and has no overlapping browser/public write policy;
 - both legitimate `books.category` lineages (`text` or `book_category`) are recognized;
 - publication evidence governance includes Health, Psychology, Business, and dynamic material-claim cues.
 
-Immediately rerun the semantic verifier after any Lovable schema publish or generated `pg_dump` migration. A later schema-diff migration that removes these objects is a release blocker even if CI remains green.
+Immediately rerun the semantic verifier after any Lovable schema publish or generated `pg_dump` migration. A later schema-diff migration that removes these objects or resets these grants/policies is a release blocker even if CI remains green.
 
 ## Production smoke
 
@@ -81,11 +83,12 @@ Verify against live production after deployment:
 6. usage meters for text, visuals and narration;
 7. export entitlements by tier;
 8. cancellation/refund lifecycle, including proof that cancelled subscriptions do not retain paid entitlement through a stale `profiles.plan` fallback;
-9. publishing-service order creation and validation-gated ISBN behavior;
-10. publication-quality pipeline against a controlled fixture;
-11. Teams pooled usage, member plan inheritance, seat add/remove and organization behavior before Teams sale;
-12. payout reservation -> Stripe transfer -> acknowledgement -> retry/failure behavior using controlled settlement evidence;
-13. marketplace remains closed until Connect transfer/retry/refund settlement has separately passed.
+9. browser certificate-tamper regression: authenticated/anonymous users cannot update, delete, un-revoke or self-upgrade `publishing_certificates`;
+10. publishing-service order creation and validation-gated ISBN behavior;
+11. publication-quality pipeline against a controlled fixture;
+12. Teams pooled usage, member plan inheritance, seat add/remove and organization behavior before Teams sale;
+13. payout reservation -> Stripe transfer -> acknowledgement -> retry/failure behavior using controlled settlement evidence;
+14. marketplace remains closed until Connect transfer/retry/refund settlement has separately passed.
 
 ## Content-quality smoke
 
