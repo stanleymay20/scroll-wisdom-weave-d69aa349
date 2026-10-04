@@ -40,6 +40,22 @@ export function publicationMintEnabled(value?: string | null): boolean {
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
+
+/**
+ * Teams is a separate commercial promise from the individual Creator/Pro
+ * plans. Keep new Teams checkout closed until pooled organization usage,
+ * member plan inheritance and the advertised included seats have passed their
+ * own end-to-end qualification. General payment GA must never open it by
+ * accident.
+ */
+export function teamsSubscriptionCheckoutEnabled(value?: string | null): boolean {
+  const normalized = String(
+    value === undefined ? Deno.env.get("GA_TEAMS_SUBSCRIPTION_ENABLED") ?? "" : value ?? "",
+  ).trim().toLowerCase();
+
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
 const ADVANCED_BOOK_TYPES = new Set([
   "academic",
   "technical",
