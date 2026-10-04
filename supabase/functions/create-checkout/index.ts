@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { ensureBillingCustomer } from "../_shared/billing-customer.ts";
-import { externalPaymentWritesEnabled } from "../_shared/ga-release-flags.ts";
+import { externalPaymentWritesEnabled, teamsSubscriptionCheckoutEnabled } from "../_shared/ga-release-flags.ts";
 import {
   expectedPublicPlanAmountCents,
   isBillingInterval,
@@ -78,6 +78,20 @@ serve(async (req) => {
         status: 400,
       });
     }
+
+    // Teams carries a materially different contract from individual plans:
+    // pooled organization usage plus included seats. General payment GA must
+    // not make it chargeable until that contract has separately passed E2E.
+    if (tier === "prophet_tier" && !teamsSubscriptionCheckoutEnabled()) {
+      return new Response(JSON.stringify({
+        error: "Teams checkout is not open yet. Pooled usage and seat inheritance are still being validated.",
+        code: "teams_not_ga_ready",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+        status: 503,
+      });
+    }
+
     if (!isBillingInterval(billingInterval)) {
       return new Response(JSON.stringify({
         error: "Invalid billing interval.",
