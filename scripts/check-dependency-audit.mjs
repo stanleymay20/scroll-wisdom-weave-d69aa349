@@ -25,9 +25,17 @@ console.log("--- end reviewed dependency backlog ---");
 // Fail closed on drift in the raw production audit *before* applying Bun's
 // global advisory ignores. This prevents a reviewed GHSA from silently masking
 // the same vulnerable package when a second production parent appears.
-const foundAdvisories = new Set(
-  [...backlogText.matchAll(/https:\/\/github\.com\/advisories\/(GHSA-[A-Za-z0-9-]+)/g)].map((match) => match[1]),
-);
+const advisoryPrefix = "https://github.com/advisories/";
+const foundAdvisories = new Set();
+for (const line of backlogText.split(/\r?\n/)) {
+  const marker = line.indexOf(advisoryPrefix);
+  if (marker < 0) continue;
+  const tail = line.slice(marker + advisoryPrefix.length).trim();
+  const advisoryId = tail.split(/\s+/, 1)[0];
+  if (/^GHSA-[A-Za-z0-9-]+$/.test(advisoryId)) {
+    foundAdvisories.add(advisoryId);
+  }
+}
 const expectedAdvisories = new Set(policy.advisories);
 const missingAdvisories = [...expectedAdvisories].filter((id) => !foundAdvisories.has(id));
 const unexpectedAdvisories = [...foundAdvisories].filter((id) => !expectedAdvisories.has(id));
