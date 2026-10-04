@@ -1,57 +1,29 @@
 {
   "schemaVersion": 1,
-  "sampleId": "replace-with-corpus-sample-id",
-  "bookId": "replace-with-generated-book-id",
+  "corpusSampleId": "replace-with-corpus-sample-id",
   "tierRoute": "free|creator|pro|teams",
-  "provider": "replace-with-provider",
-  "generationModel": "replace-with-model",
-  "auditModel": "replace-with-model",
-  "generationPromptVersion": "replace-with-version",
-  "auditPromptVersion": "replace-with-version",
-  "reviewer": {
-    "name": "Independent Reviewer Name",
-    "relationship": "independent|editor|subject-matter-reviewer",
-    "reviewedAt": "YYYY-MM-DD"
-  },
-  "scores": {
-    "contentIntegrity": 0,
-    "coherence": 0,
-    "depth": 0,
-    "proseQuality": 0,
-    "structureAndPacing": 0,
-    "audienceFitAndPedagogy": 0,
-    "originalityAndNonFormulaicTreatment": 0,
-    "publicationUsability": 0,
-    "overall": 0
-  },
-  "issues": {
-    "critical": [],
-    "major": [],
-    "minor": []
-  },
-  "evidence": [
-    {
-      "dimension": "replace-with-dimension",
-      "chapter": 1,
-      "excerpt": "Short representative excerpt or location reference",
-      "comment": "Why this evidence supports the score"
+  "reviewedAt": "YYYY-MM-DD",
+  "books": {
+    "replace-with-generated-book-uuid": {
+      "humanReview": {
+        "reviewer": "Independent Reviewer Name",
+        "criticalIssues": 0,
+        "dimensions": {
+          "contentIntegrity": 0,
+          "coherence": 0,
+          "typeFidelity": 0,
+          "readerValue": 0,
+          "editorialPolish": 0
+        }
+      },
+      "reviewNotes": [
+        {
+          "dimension": "contentIntegrity|coherence|typeFidelity|readerValue|editorialPolish",
+          "chapter": 1,
+          "excerpt": "Short representative excerpt or location reference",
+          "comment": "Evidence supporting the review score"
+        }
+      ]
     }
-  ],
-  "publicationJudgement": {
-    "publishAfterNormalCopyeditOnly": false,
-    "readsLikeUneditedAI": false,
-    "notes": ""
-  },
-  "machineEvidence": {
-    "chiefEditorOverall": 0,
-    "publishabilityScore": 0,
-    "publishabilityBlockers": 0,
-    "publishabilityWarnings": 0,
-    "evidencePassed": false,
-    "technicalAuditPassed": null,
-    "rightsPassed": null,
-    "productionRenderPassed": false,
-    "scopeHash": "replace-with-current-scope-hash"
-  },
-  "verdict": "pass|fail"
+  }
 }
