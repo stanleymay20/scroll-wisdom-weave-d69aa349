@@ -683,6 +683,140 @@ export type Database = {
           },
         ]
       }
+      billing_order_refunds: {
+        Row: {
+          amount_cents: number
+          billing_order_id: string
+          created_at: string
+          id: string
+          stripe_refund_id: string
+        }
+        Insert: {
+          amount_cents: number
+          billing_order_id: string
+          created_at?: string
+          id?: string
+          stripe_refund_id: string
+        }
+        Update: {
+          amount_cents?: number
+          billing_order_id?: string
+          created_at?: string
+          id?: string
+          stripe_refund_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_order_refunds_billing_order_id_fkey"
+            columns: ["billing_order_id"]
+            isOneToOne: false
+            referencedRelation: "billing_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_orders: {
+        Row: {
+          benefit_month: string
+          created_at: string
+          currency: string
+          expected_amount_cents: number
+          fulfilled_at: string | null
+          id: string
+          kind: string
+          metadata: Json
+          paid_at: string | null
+          refunded_at: string | null
+          sku: string
+          status: string
+          stripe_customer_id: string | null
+          stripe_payment_intent_id: string | null
+          stripe_session_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          benefit_month: string
+          created_at?: string
+          currency?: string
+          expected_amount_cents: number
+          fulfilled_at?: string | null
+          id?: string
+          kind: string
+          metadata?: Json
+          paid_at?: string | null
+          refunded_at?: string | null
+          sku: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          benefit_month?: string
+          created_at?: string
+          currency?: string
+          expected_amount_cents?: number
+          fulfilled_at?: string | null
+          id?: string
+          kind?: string
+          metadata?: Json
+          paid_at?: string | null
+          refunded_at?: string | null
+          sku?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      billing_usage_monthly: {
+        Row: {
+          ai_text_words_used: number
+          audio_units_used: number
+          books_used: number
+          created_at: string
+          extra_ai_text_words: number
+          extra_audio_credits: number
+          extra_visual_credits: number
+          month: string
+          updated_at: string
+          user_id: string
+          visual_credits_used: number
+        }
+        Insert: {
+          ai_text_words_used?: number
+          audio_units_used?: number
+          books_used?: number
+          created_at?: string
+          extra_ai_text_words?: number
+          extra_audio_credits?: number
+          extra_visual_credits?: number
+          month: string
+          updated_at?: string
+          user_id: string
+          visual_credits_used?: number
+        }
+        Update: {
+          ai_text_words_used?: number
+          audio_units_used?: number
+          books_used?: number
+          created_at?: string
+          extra_ai_text_words?: number
+          extra_audio_credits?: number
+          extra_visual_credits?: number
+          month?: string
+          updated_at?: string
+          user_id?: string
+          visual_credits_used?: number
+        }
+        Relationships: []
+      }
       book_asset_provenance: {
         Row: {
           asset_role: string
@@ -2547,6 +2681,7 @@ export type Database = {
           rev_share_surcharge_bps: number
           rev_share_surcharge_cents: number
           risk_score: number | null
+          source_event_id: string | null
         }
         Insert: {
           available_at?: string | null
@@ -2577,6 +2712,7 @@ export type Database = {
           rev_share_surcharge_bps?: number
           rev_share_surcharge_cents?: number
           risk_score?: number | null
+          source_event_id?: string | null
         }
         Update: {
           available_at?: string | null
@@ -2607,6 +2743,7 @@ export type Database = {
           rev_share_surcharge_bps?: number
           rev_share_surcharge_cents?: number
           risk_score?: number | null
+          source_event_id?: string | null
         }
         Relationships: []
       }
@@ -5474,6 +5611,7 @@ export type Database = {
           currency: string
           error_message: string | null
           id: string
+          idempotency_key: string | null
           metadata: Json
           processed_at: string | null
           processed_by: string | null
@@ -5496,6 +5634,7 @@ export type Database = {
           currency?: string
           error_message?: string | null
           id?: string
+          idempotency_key?: string | null
           metadata?: Json
           processed_at?: string | null
           processed_by?: string | null
@@ -5518,6 +5657,7 @@ export type Database = {
           currency?: string
           error_message?: string | null
           id?: string
+          idempotency_key?: string | null
           metadata?: Json
           processed_at?: string | null
           processed_by?: string | null
@@ -6905,6 +7045,10 @@ export type Database = {
         Args: { _display_name?: string; _user_id: string }
         Returns: string
       }
+      fail_billing_order: {
+        Args: { _order_id: string; _stripe_session_id: string }
+        Returns: Json
+      }
       get_admin_user_metrics: { Args: never; Returns: Json }
       get_book_elite_readiness: { Args: { _book_id: string }; Returns: Json }
       get_creator_audience_summary: {
@@ -6967,6 +7111,7 @@ export type Database = {
           title: string
         }[]
       }
+      get_my_billing_usage_snapshot: { Args: never; Returns: Json }
       get_my_entitlements: { Args: never; Returns: Json }
       get_my_platform_connections: {
         Args: never
@@ -7014,6 +7159,10 @@ export type Database = {
         }[]
       }
       get_user_entitlements: { Args: { _user_id: string }; Returns: Json }
+      get_user_marketplace_fee_bps: {
+        Args: { _user_id: string }
+        Returns: number
+      }
       get_user_recommendation_suppression: {
         Args: { _user_id: string; _window_days?: number }
         Returns: {
@@ -7029,6 +7178,15 @@ export type Database = {
         Returns: number
       }
       get_user_usage_snapshot: { Args: { _user_id: string }; Returns: Json }
+      grant_billing_usage_addon: {
+        Args: {
+          _addon: string
+          _month: string
+          _units: number
+          _user_id: string
+        }
+        Returns: Json
+      }
       has_creator_capability: {
         Args: { _capability: string; _user_id: string }
         Returns: boolean
@@ -7103,7 +7261,32 @@ export type Database = {
         Args: { _purchase_id: string }
         Returns: undefined
       }
+      record_billing_order_refund: {
+        Args: {
+          _amount_cents: number
+          _order_id: string
+          _stripe_refund_id: string
+        }
+        Returns: Json
+      }
       record_purchase_ledger: { Args: { _purchase_id: string }; Returns: Json }
+      record_purchase_refund_ledger: {
+        Args: {
+          _purchase_id: string
+          _refund_amount_cents: number
+          _refund_event_id: string
+        }
+        Returns: Json
+      }
+      release_billing_usage: {
+        Args: {
+          _metric: string
+          _month: string
+          _units: number
+          _user_id: string
+        }
+        Returns: number
+      }
       release_book_generation: {
         Args: { _books: number; _day: string; _user_id: string }
         Returns: number
@@ -7115,6 +7298,21 @@ export type Database = {
       release_tts_minutes: {
         Args: { _minutes: number; _month: string; _user_id: string }
         Returns: number
+      }
+      reserve_billing_usage: {
+        Args: {
+          _base_limit: number
+          _metric: string
+          _month: string
+          _units: number
+          _user_id: string
+        }
+        Returns: {
+          allowed: boolean
+          effective_limit: number
+          remaining: number
+          used: number
+        }[]
       }
       reserve_book_generation: {
         Args: { _books: number; _day: string; _limit: number; _user_id: string }
@@ -7159,6 +7357,15 @@ export type Database = {
         }[]
       }
       set_platform_fee: { Args: { _bps: number }; Returns: Json }
+      settle_billing_order: {
+        Args: {
+          _order_id: string
+          _stripe_customer_id: string
+          _stripe_payment_intent_id: string
+          _stripe_session_id: string
+        }
+        Returns: Json
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       snapshot_creator_entitlement:
