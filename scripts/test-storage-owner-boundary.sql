@@ -7,9 +7,24 @@ DO $$
 DECLARE
   bad_policy record;
 BEGIN
-  -- Legacy book-assets policies must be gone: with permissive RLS they OR with
-  -- stricter policies and allow any authenticated user to overwrite/delete
-  -- another user's object.
+  -- A permissive browser-write policy with no bucket predicate is global and
+  -- can authorize writes to every bucket, regardless of stricter policies.
+  FOR bad_policy IN
+    SELECT policyname, cmd, roles, qual, with_check
+    FROM pg_policies
+    WHERE schemaname = 'storage'
+      AND tablename = 'objects'
+      AND permissive = 'PERMISSIVE'
+      AND cmd IN ('ALL', 'INSERT', 'UPDATE', 'DELETE')
+      AND roles && ARRAY['public'::name, 'anon'::name, 'authenticated'::name]
+      AND (coalesce(qual, '') || ' ' || coalesce(with_check, '')) NOT LIKE '%bucket_id%'
+  LOOP
+    RAISE EXCEPTION 'global permissive browser storage-write policy: % (%) roles=% qual=% with_check=%',
+      bad_policy.policyname, bad_policy.cmd, bad_policy.roles, bad_policy.qual, bad_policy.with_check;
+  END LOOP;
+
+  -- Legacy book-assets policies must be gone: permissive RLS policies OR
+  -- together, so these broaden the newer owner-folder rules.
   IF EXISTS (
     SELECT 1
     FROM pg_policies
@@ -24,18 +39,39 @@ BEGIN
     RAISE EXCEPTION 'legacy broad book-assets write policy still exists';
   END IF;
 
-  -- Every book-assets browser write policy must be authenticated and owner-bound.
+  -- Every permissive browser policy that can write book-assets must be
+  -- operation-specific, authenticated-only, and owner-bound. FOR ALL is
+  -- deliberately rejected so a single rule cannot silently broaden multiple
+  -- write operations later.
   FOR bad_policy IN
     SELECT policyname, cmd, roles, qual, with_check
     FROM pg_policies
     WHERE schemaname = 'storage'
       AND tablename = 'objects'
-      AND cmd IN ('INSERT', 'UPDATE', 'DELETE')
+      AND permissive = 'PERMISSIVE'
+      AND cmd IN ('ALL', 'INSERT', 'UPDATE', 'DELETE')
+      AND roles && ARRAY['public'::name, 'anon'::name, 'authenticated'::name]
       AND (coalesce(qual, '') || ' ' || coalesce(with_check, '')) LIKE '%book-assets%'
       AND NOT (
         roles = ARRAY['authenticated'::name]
-        AND (coalesce(qual, '') || ' ' || coalesce(with_check, '')) LIKE '%storage.foldername(name)%'
-        AND (coalesce(qual, '') || ' ' || coalesce(with_check, '')) LIKE '%auth.uid()%'
+        AND CASE cmd
+          WHEN 'INSERT' THEN
+            coalesce(with_check, '') LIKE '%book-assets%'
+            AND coalesce(with_check, '') LIKE '%storage.foldername(name)%'
+            AND coalesce(with_check, '') LIKE '%auth.uid()%'
+          WHEN 'UPDATE' THEN
+            coalesce(qual, '') LIKE '%book-assets%'
+            AND coalesce(qual, '') LIKE '%storage.foldername(name)%'
+            AND coalesce(qual, '') LIKE '%auth.uid()%'
+            AND coalesce(with_check, '') LIKE '%book-assets%'
+            AND coalesce(with_check, '') LIKE '%storage.foldername(name)%'
+            AND coalesce(with_check, '') LIKE '%auth.uid()%'
+          WHEN 'DELETE' THEN
+            coalesce(qual, '') LIKE '%book-assets%'
+            AND coalesce(qual, '') LIKE '%storage.foldername(name)%'
+            AND coalesce(qual, '') LIKE '%auth.uid()%'
+          ELSE false
+        END
       )
   LOOP
     RAISE EXCEPTION 'unsafe book-assets write policy: % (%) roles=% qual=% with_check=%',
@@ -98,12 +134,30 @@ BEGIN
     FROM pg_policies
     WHERE schemaname='storage'
       AND tablename='objects'
-      AND cmd IN ('INSERT', 'UPDATE', 'DELETE')
+      AND permissive = 'PERMISSIVE'
+      AND cmd IN ('ALL', 'INSERT', 'UPDATE', 'DELETE')
+      AND roles && ARRAY['public'::name, 'anon'::name, 'authenticated'::name]
       AND (coalesce(qual, '') || ' ' || coalesce(with_check, '')) LIKE '%comic-panels%'
       AND NOT (
         roles = ARRAY['authenticated'::name]
-        AND (coalesce(qual, '') || ' ' || coalesce(with_check, '')) LIKE '%storage.foldername(name)%'
-        AND (coalesce(qual, '') || ' ' || coalesce(with_check, '')) LIKE '%auth.uid()%'
+        AND CASE cmd
+          WHEN 'INSERT' THEN
+            coalesce(with_check, '') LIKE '%comic-panels%'
+            AND coalesce(with_check, '') LIKE '%storage.foldername(name)%'
+            AND coalesce(with_check, '') LIKE '%auth.uid()%'
+          WHEN 'UPDATE' THEN
+            coalesce(qual, '') LIKE '%comic-panels%'
+            AND coalesce(qual, '') LIKE '%storage.foldername(name)%'
+            AND coalesce(qual, '') LIKE '%auth.uid()%'
+            AND coalesce(with_check, '') LIKE '%comic-panels%'
+            AND coalesce(with_check, '') LIKE '%storage.foldername(name)%'
+            AND coalesce(with_check, '') LIKE '%auth.uid()%'
+          WHEN 'DELETE' THEN
+            coalesce(qual, '') LIKE '%comic-panels%'
+            AND coalesce(qual, '') LIKE '%storage.foldername(name)%'
+            AND coalesce(qual, '') LIKE '%auth.uid()%'
+          ELSE false
+        END
       )
   LOOP
     RAISE EXCEPTION 'unsafe comic-panels write policy: % (%) roles=% qual=% with_check=%',
@@ -122,19 +176,48 @@ BEGIN
     RAISE EXCEPTION 'canonical owner-bound comic-panels INSERT policy missing';
   END IF;
 
-  -- study-music writes are server-owned. No PUBLIC/anon/authenticated policy may
-  -- authorize INSERT based only on bucket_id.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='storage' AND tablename='objects'
+      AND policyname='Users can update their own comic panels' AND cmd='UPDATE'
+      AND roles = ARRAY['authenticated'::name]
+      AND coalesce(qual, '') LIKE '%comic-panels%'
+      AND coalesce(qual, '') LIKE '%storage.foldername(name)%'
+      AND coalesce(qual, '') LIKE '%auth.uid()%'
+      AND coalesce(with_check, '') LIKE '%comic-panels%'
+      AND coalesce(with_check, '') LIKE '%storage.foldername(name)%'
+      AND coalesce(with_check, '') LIKE '%auth.uid()%'
+  ) THEN
+    RAISE EXCEPTION 'canonical owner-bound comic-panels UPDATE policy missing';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='storage' AND tablename='objects'
+      AND policyname='Users can delete their own comic panels' AND cmd='DELETE'
+      AND roles = ARRAY['authenticated'::name]
+      AND coalesce(qual, '') LIKE '%comic-panels%'
+      AND coalesce(qual, '') LIKE '%storage.foldername(name)%'
+      AND coalesce(qual, '') LIKE '%auth.uid()%'
+  ) THEN
+    RAISE EXCEPTION 'canonical owner-bound comic-panels DELETE policy missing';
+  END IF;
+
+  -- study-music is server-owned. Any permissive browser-role write rule scoped
+  -- to this bucket is a release blocker; a global browser rule was rejected at
+  -- the top of this test.
   FOR bad_policy IN
     SELECT policyname, cmd, roles, qual, with_check
     FROM pg_policies
     WHERE schemaname='storage'
       AND tablename='objects'
-      AND cmd='INSERT'
-      AND coalesce(with_check, '') LIKE '%study-music%'
-      AND roles <> ARRAY['service_role'::name]
+      AND permissive = 'PERMISSIVE'
+      AND cmd IN ('ALL', 'INSERT', 'UPDATE', 'DELETE')
+      AND roles && ARRAY['public'::name, 'anon'::name, 'authenticated'::name]
+      AND (coalesce(qual, '') || ' ' || coalesce(with_check, '')) LIKE '%study-music%'
   LOOP
-    RAISE EXCEPTION 'unsafe study-music INSERT policy: % roles=% with_check=%',
-      bad_policy.policyname, bad_policy.roles, bad_policy.with_check;
+    RAISE EXCEPTION 'unsafe study-music browser write policy: % (%) roles=% qual=% with_check=%',
+      bad_policy.policyname, bad_policy.cmd, bad_policy.roles, bad_policy.qual, bad_policy.with_check;
   END LOOP;
 
   IF NOT EXISTS (
