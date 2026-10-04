@@ -1,19 +1,11 @@
 {
-  "expires": "2026-10-06",
-  "reason": "Remaining high advisories after the 2026-09-14 same-major patched transitive overrides (lodash-es, underscore, fast-uri, @babel/plugin-transform-modules-systemjs, nanoid, postcss, browserslist). These 13 have no same-major patched version reachable through the current dependency graph: glob, brace-expansion, minimatch and picomatch arrive via eslint, typescript-eslint, workbox-build and tailwindcss; vite and image-size would need a major upgrade of vite or pptxgenjs. Each must be remediated or explicitly renewed with an updated risk rationale before the expiry.",
+  "expires": "2026-10-18",
+  "reason": "After reclassifying build/test-only tooling out of the production dependency closure on 2026-10-04, the only remaining high advisories are GHSA-5p2g-fcmc-qvqq and GHSA-w3rx-r6r6-pgpr in image-size, declared transitively by pptxgenjs@4.0.1. The vulnerabilities are real, but upstream PptxGenJS PR #1529 documents that image-size is an unused manifest dependency: it is not imported by the distributed bundles, PptxGenJS marks image-size=false for browser builds, and its image/media demos pass without the package. ScrollLibrary imports pptxgenjs only in the browser learning-deck exporter. scripts/check-pptxgenjs-image-size-reachability.mjs fail-closes CI if that assumption changes, and scripts/check-dependency-audit.mjs additionally binds the global advisory ignore to the single reviewed production path reported by the raw Bun audit. No patched image-size release is installable through the official PptxGenJS dependency graph as of 2026-10-04. Recheck upstream PR #1529 / a new PptxGenJS release before this short exception expires; remove the exception immediately once upstream drops the dead dependency.",
   "advisories": [
-    "GHSA-23c5-xmqv-rm74",
-    "GHSA-3jxr-9vmj-r5cp",
-    "GHSA-3ppc-4f35-3m26",
-    "GHSA-5j98-mcp5-4vw2",
     "GHSA-5p2g-fcmc-qvqq",
-    "GHSA-7r86-cg39-jmmj",
-    "GHSA-c2c7-rcm5-vvqj",
-    "GHSA-fx2h-pf6j-xcff",
-    "GHSA-mh99-v99m-4gvg",
-    "GHSA-p9ff-h696-f583",
-    "GHSA-rgw5-rvv9-x895",
-    "GHSA-v2wj-q39q-566r",
     "GHSA-w3rx-r6r6-pgpr"
+  ],
+  "expectedProductionPaths": [
+    "pptxgenjs › image-size"
   ]
 }
