@@ -40,10 +40,16 @@ BEGIN
      OR has_table_privilege('authenticated','public.creator_payout_allocations','SELECT') THEN
     RAISE EXCEPTION 'authenticated role can directly read payout settlement tables';
   END IF;
-  IF has_function_privilege('authenticated','public.reserve_creator_payout(uuid,text,integer)','EXECUTE')
+
+  -- Every settlement RPC is server-owned. Read-looking SECURITY DEFINER functions
+  -- are included deliberately: get_creator_payout_balance(uuid) accepts an arbitrary
+  -- creator UUID, so a future default PUBLIC EXECUTE grant would leak financial totals.
+  IF has_function_privilege('authenticated','public.creator_payout_entry_is_eligible(public.creator_earnings_ledger)','EXECUTE')
+     OR has_function_privilege('authenticated','public.get_creator_payout_balance(uuid)','EXECUTE')
+     OR has_function_privilege('authenticated','public.list_creator_payout_candidates(integer,integer)','EXECUTE')
+     OR has_function_privilege('authenticated','public.reserve_creator_payout(uuid,text,integer)','EXECUTE')
      OR has_function_privilege('authenticated','public.mark_creator_payout_transferred(uuid,text)','EXECUTE')
-     OR has_function_privilege('authenticated','public.mark_creator_payout_failed(uuid,text,text)','EXECUTE')
-     OR has_function_privilege('authenticated','public.list_creator_payout_candidates(integer,integer)','EXECUTE') THEN
+     OR has_function_privilege('authenticated','public.mark_creator_payout_failed(uuid,text,text)','EXECUTE') THEN
     RAISE EXCEPTION 'authenticated role can execute payout settlement RPCs';
   END IF;
 
