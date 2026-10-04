@@ -87,18 +87,26 @@ export function SystemDoctor() {
     updateTest("Storage Access", { status: "running" });
     const storageStart = Date.now();
     try {
-      const testPath = `diagnostics/test-${Date.now()}.txt`;
-      const testData = new Uint8Array([116, 101, 115, 116]);
+      const { data: { session: storageSession }, error: storageSessionError } = await supabase.auth.getSession();
+      if (storageSessionError) throw storageSessionError;
+      if (!storageSession?.user?.id) {
+        throw new Error("Authenticated session required for storage diagnostics");
+      }
+
+      // Browser storage writes are deliberately owner-folder scoped. Keep the
+      // diagnostic inside the signed-in administrator's top-level UUID folder.
+      const testPath = `${storageSession.user.id}/diagnostics/test-${Date.now()}.png`;
+      const testData = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
       
       const { error: uploadError } = await supabase.storage
         .from("book-assets")
-        .upload(testPath, testData.buffer, { upsert: true });
+        .upload(testPath, testData.buffer, { upsert: true, contentType: "image/png" });
       
       if (uploadError) {
-        // Try comic-panels bucket as fallback
+        // Try comic-panels bucket as fallback using the same owner-bound path.
         const { error: fallbackError } = await supabase.storage
           .from("comic-panels")
-          .upload(testPath, testData.buffer, { upsert: true });
+          .upload(testPath, testData.buffer, { upsert: true, contentType: "image/png" });
         
         if (fallbackError) throw fallbackError;
         
