@@ -194,5 +194,5 @@ export const DEFAULT_BESTSELLER_CHECKS: QACheckItem[] = [
   { id: "no_markdown", label: "No markdown artifacts", passed: null, category: "format" },
   { id: "short_paragraphs", label: "Short paragraphs (2-5 lines)", passed: null, category: "format" },
   { id: "clean_formatting", label: "Clean formatting", passed: null, category: "format" },
-  { id: "publish_ready", label: "Layout checks passed", passed: null, category: "format" },
+  { id: "publish_ready", label: "Layout quality checks", passed: null, category: "format" },
 ];
