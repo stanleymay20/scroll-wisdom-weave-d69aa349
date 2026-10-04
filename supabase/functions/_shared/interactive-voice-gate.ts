@@ -43,7 +43,6 @@ async function resolvePlanAndAdmin(supabase: any, userId: string) {
   const [
     { data: roleData, error: roleError },
     { data: subscription, error: subscriptionError },
-    { data: profile, error: profileError },
   ] = await Promise.all([
     supabase
       .from("user_roles")
@@ -53,26 +52,29 @@ async function resolvePlanAndAdmin(supabase: any, userId: string) {
       .maybeSingle(),
     supabase
       .from("subscriptions")
-      .select("tier,status")
+      .select("tier,status,current_period_end")
       .eq("user_id", userId)
-      .maybeSingle(),
-    supabase
-      .from("profiles")
-      .select("plan")
-      .or(`user_id.eq.${userId},id.eq.${userId}`)
       .maybeSingle(),
   ]);
 
   if (roleError) throw new Error(`voice_admin_resolution_failed:${roleError.message}`);
   if (subscriptionError) throw new Error(`voice_subscription_resolution_failed:${subscriptionError.message}`);
-  if (profileError) throw new Error(`voice_plan_resolution_failed:${profileError.message}`);
 
   const isAdmin = !!roleData;
-  const subscribedPlan =
-    subscription?.status === "active" || subscription?.status === "trialing"
-      ? subscription?.tier
-      : null;
-  const plan = billingPlanFor(subscribedPlan ?? profile?.plan);
+  const subscriptionHasAccess =
+    subscription?.status === "active" || subscription?.status === "trialing";
+  const periodIsCurrent =
+    !subscription?.current_period_end
+    || new Date(subscription.current_period_end).getTime() > Date.now();
+  const subscribedPlan = subscriptionHasAccess && periodIsCurrent
+    ? subscription?.tier
+    : null;
+
+  // profiles.plan is a UI/cache mirror synchronized by the webhook and
+  // check-subscription. It is deliberately not an authority for paid compute:
+  // a delayed/missed sync must never preserve paid voice quota after the
+  // subscription authority has expired or become inactive.
+  const plan = billingPlanFor(subscribedPlan);
   return { isAdmin, plan };
 }
 

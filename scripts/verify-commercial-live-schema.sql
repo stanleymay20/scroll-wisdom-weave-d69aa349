@@ -8,7 +8,47 @@ DECLARE
   v_evidence_def text;
   v_category_data_type text;
   v_category_udt text;
+  sig text;
 BEGIN
+  -- Economic billing authority must physically exist.
+  IF to_regclass('public.billing_usage_monthly') IS NULL THEN
+    RAISE EXCEPTION 'billing_usage_monthly missing';
+  END IF;
+  IF to_regclass('public.billing_orders') IS NULL THEN
+    RAISE EXCEPTION 'billing_orders missing';
+  END IF;
+  IF to_regclass('public.billing_order_refunds') IS NULL THEN
+    RAISE EXCEPTION 'billing_order_refunds missing';
+  END IF;
+
+  FOREACH sig IN ARRAY ARRAY[
+    'public.reserve_billing_usage(uuid,text,text,bigint,bigint)',
+    'public.release_billing_usage(uuid,text,text,bigint)',
+    'public.grant_billing_usage_addon(uuid,text,text,bigint)',
+    'public.settle_billing_order(uuid,text,text,text)',
+    'public.fail_billing_order(uuid,text)',
+    'public.record_billing_order_refund(uuid,text,integer)'
+  ] LOOP
+    IF to_regprocedure(sig) IS NULL THEN
+      RAISE EXCEPTION 'billing authority function missing: %', sig;
+    END IF;
+    IF has_function_privilege('anon', sig, 'EXECUTE')
+       OR has_function_privilege('authenticated', sig, 'EXECUTE') THEN
+      RAISE EXCEPTION 'browser role can execute server billing RPC: %', sig;
+    END IF;
+    IF NOT has_function_privilege('service_role', sig, 'EXECUTE') THEN
+      RAISE EXCEPTION 'service_role cannot execute billing RPC: %', sig;
+    END IF;
+  END LOOP;
+
+  IF to_regprocedure('public.get_my_billing_usage_snapshot()') IS NULL THEN
+    RAISE EXCEPTION 'get_my_billing_usage_snapshot missing';
+  END IF;
+  IF has_function_privilege('anon','public.get_my_billing_usage_snapshot()','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.get_my_billing_usage_snapshot()','EXECUTE') THEN
+    RAISE EXCEPTION 'billing usage snapshot browser privileges are wrong';
+  END IF;
+
   -- Creator payout settlement must physically exist.
   IF to_regclass('public.creator_payout_transfers') IS NULL THEN
     RAISE EXCEPTION 'creator_payout_transfers missing';
@@ -41,16 +81,84 @@ BEGIN
     RAISE EXCEPTION 'authenticated role can directly read payout settlement tables';
   END IF;
 
-  -- Every settlement RPC is server-owned. Read-looking SECURITY DEFINER functions
-  -- are included deliberately: get_creator_payout_balance(uuid) accepts an arbitrary
-  -- creator UUID, so a future default PUBLIC EXECUTE grant would leak financial totals.
-  IF has_function_privilege('authenticated','public.creator_payout_entry_is_eligible(public.creator_earnings_ledger)','EXECUTE')
-     OR has_function_privilege('authenticated','public.get_creator_payout_balance(uuid)','EXECUTE')
-     OR has_function_privilege('authenticated','public.list_creator_payout_candidates(integer,integer)','EXECUTE')
-     OR has_function_privilege('authenticated','public.reserve_creator_payout(uuid,text,integer)','EXECUTE')
-     OR has_function_privilege('authenticated','public.mark_creator_payout_transferred(uuid,text)','EXECUTE')
-     OR has_function_privilege('authenticated','public.mark_creator_payout_failed(uuid,text,text)','EXECUTE') THEN
-    RAISE EXCEPTION 'authenticated role can execute payout settlement RPCs';
+  FOREACH sig IN ARRAY ARRAY[
+    'public.creator_payout_entry_is_eligible(public.creator_earnings_ledger)',
+    'public.get_creator_payout_balance(uuid)',
+    'public.list_creator_payout_candidates(integer,integer)',
+    'public.reserve_creator_payout(uuid,text,integer)',
+    'public.mark_creator_payout_transferred(uuid,text)',
+    'public.mark_creator_payout_failed(uuid,text,text)'
+  ] LOOP
+    IF has_function_privilege('anon', sig, 'EXECUTE')
+       OR has_function_privilege('authenticated', sig, 'EXECUTE') THEN
+      RAISE EXCEPTION 'browser role can execute payout settlement RPC: %', sig;
+    END IF;
+  END LOOP;
+
+  -- Internal SECURITY DEFINER maintenance RPCs must remain server-only.
+  FOREACH sig IN ARRAY ARRAY[
+    'public._phase1_backfill_works()',
+    'public.consume_rate_limit(text,text,integer,integer)',
+    'public.ensure_individual_rights_holder(uuid,text)',
+    'public.get_effective_user_tier(uuid)',
+    'public.get_user_asset_entitlements(uuid)',
+    'public.get_user_recommendation_suppression(uuid,integer)',
+    'public.notify_followers_on_schedule_release(uuid)',
+    'public.purge_velocity_buckets()',
+    'public.record_asset_purchase_ledger(uuid)',
+    'public.reserve_book_generation(uuid,date,integer,integer)',
+    'public.release_book_generation(uuid,date,integer)',
+    'public.snapshot_creator_entitlement(uuid,text,uuid)',
+    'public.snapshot_creator_entitlement(uuid,text,text,jsonb)',
+    'public.sweep_stale_jobs(integer,integer)'
+  ] LOOP
+    IF to_regprocedure(sig) IS NULL THEN
+      RAISE EXCEPTION 'internal RPC missing: %', sig;
+    END IF;
+    IF has_function_privilege('anon', sig, 'EXECUTE')
+       OR has_function_privilege('authenticated', sig, 'EXECUTE') THEN
+      RAISE EXCEPTION 'browser role can execute internal SECURITY DEFINER RPC: %', sig;
+    END IF;
+    IF NOT has_function_privilege('service_role', sig, 'EXECUTE') THEN
+      RAISE EXCEPTION 'service_role cannot execute internal RPC: %', sig;
+    END IF;
+  END LOOP;
+
+  IF has_function_privilege('anon','public.log_audit_event(text,uuid,uuid,text,text,text,jsonb)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.log_audit_event(text,uuid,uuid,text,text,text,jsonb)','EXECUTE') THEN
+    RAISE EXCEPTION 'log_audit_event privilege contract is wrong';
+  END IF;
+  IF has_function_privilege('anon','public.set_platform_fee(integer)','EXECUTE') THEN
+    RAISE EXCEPTION 'anon can execute set_platform_fee';
+  END IF;
+
+  -- Publishing certificates are immutable evidence from the browser's point of
+  -- view. Issuance/revocation belongs to trusted server workflows only.
+  IF to_regclass('public.publishing_certificates') IS NULL THEN
+    RAISE EXCEPTION 'publishing_certificates missing';
+  END IF;
+  IF has_table_privilege('anon','public.publishing_certificates','INSERT')
+     OR has_table_privilege('anon','public.publishing_certificates','UPDATE')
+     OR has_table_privilege('anon','public.publishing_certificates','DELETE')
+     OR has_table_privilege('authenticated','public.publishing_certificates','INSERT')
+     OR has_table_privilege('authenticated','public.publishing_certificates','UPDATE')
+     OR has_table_privilege('authenticated','public.publishing_certificates','DELETE') THEN
+    RAISE EXCEPTION 'browser role can mutate publishing_certificates';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname='public'
+      AND tablename='publishing_certificates'
+      AND cmd IN ('INSERT','UPDATE','DELETE','ALL')
+      AND roles && ARRAY['public'::name,'anon'::name,'authenticated'::name]
+  ) THEN
+    RAISE EXCEPTION 'browser/public publishing certificate write policy remains';
+  END IF;
+  IF NOT has_table_privilege('service_role','public.publishing_certificates','INSERT')
+     OR NOT has_table_privilege('service_role','public.publishing_certificates','UPDATE')
+     OR NOT has_table_privilege('service_role','public.publishing_certificates','DELETE') THEN
+    RAISE EXCEPTION 'service_role lacks publishing certificate mutation authority';
   END IF;
 
   -- Public read is allowed for study music; all writes must remain server-owned.
