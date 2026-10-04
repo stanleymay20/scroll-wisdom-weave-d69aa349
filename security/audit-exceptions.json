@@ -1,8 +1,11 @@
 {
   "expires": "2026-10-18",
-  "reason": "After reclassifying build/test-only tooling out of the production dependency closure on 2026-10-04, the only remaining high advisories are GHSA-5p2g-fcmc-qvqq and GHSA-w3rx-r6r6-pgpr in image-size, declared transitively by pptxgenjs@4.0.1. The vulnerabilities are real, but upstream PptxGenJS PR #1529 documents that image-size is an unused manifest dependency: it is not imported by the distributed bundles, PptxGenJS marks image-size=false for browser builds, and its image/media demos pass without the package. ScrollLibrary imports pptxgenjs only in the browser learning-deck exporter. scripts/check-pptxgenjs-image-size-reachability.mjs now fail-closes CI if that assumption changes. No patched image-size release is installable through the official PptxGenJS dependency graph as of 2026-10-04. Recheck upstream PR #1529 / a new PptxGenJS release before this short exception expires; remove the exception immediately once upstream drops the dead dependency.",
+  "reason": "After reclassifying build/test-only tooling out of the production dependency closure on 2026-10-04, the only remaining high advisories are GHSA-5p2g-fcmc-qvqq and GHSA-w3rx-r6r6-pgpr in image-size, declared transitively by pptxgenjs@4.0.1. The vulnerabilities are real, but upstream PptxGenJS PR #1529 documents that image-size is an unused manifest dependency: it is not imported by the distributed bundles, PptxGenJS marks image-size=false for browser builds, and its image/media demos pass without the package. ScrollLibrary imports pptxgenjs only in the browser learning-deck exporter. scripts/check-pptxgenjs-image-size-reachability.mjs fail-closes CI if that assumption changes, and scripts/check-dependency-audit.mjs additionally binds the global advisory ignore to the single reviewed production path reported by the raw Bun audit. No patched image-size release is installable through the official PptxGenJS dependency graph as of 2026-10-04. Recheck upstream PR #1529 / a new PptxGenJS release before this short exception expires; remove the exception immediately once upstream drops the dead dependency.",
   "advisories": [
     "GHSA-5p2g-fcmc-qvqq",
     "GHSA-w3rx-r6r6-pgpr"
+  ],
+  "expectedProductionPaths": [
+    "pptxgenjs › image-size"
   ]
 }
