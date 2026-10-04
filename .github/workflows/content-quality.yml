@@ -1,0 +1,26 @@
+name: Content Quality Doctrine
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: content-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Enforce content quality standard and representative corpus
+        run: node scripts/check-content-quality-standard.mjs
+      - name: Validate any committed Standard Text human-review evidence
+        run: node scripts/check-standard-text-human-review.mjs
