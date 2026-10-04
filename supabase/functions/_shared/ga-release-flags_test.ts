@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { advancedAuthoringEnabled, advancedBookTypeEnabled, externalPaymentWritesEnabled, marketplacePaymentsEnabled, marketplacePayoutsEnabled, publicationMintEnabled, publishingServiceBillingEnabled, qualificationBookTypeEnabled, qualifiedAdvancedBookTypes, specializedAuthoringEnabled } from "./ga-release-flags.ts";
+import { advancedAuthoringEnabled, advancedBookTypeEnabled, externalPaymentWritesEnabled, marketplacePaymentsEnabled, marketplacePayoutsEnabled, publicationMintEnabled, publishingServiceBillingEnabled, qualificationBookTypeEnabled, qualifiedAdvancedBookTypes, specializedAuthoringEnabled, teamsSubscriptionCheckoutEnabled } from "./ga-release-flags.ts";
 
 Deno.test("GA payment writes default closed for empty or invalid values", () => {
   for (const value of ["", "false", "0", "no", "enabled", "TRUE-ish"]) {
@@ -13,6 +13,17 @@ Deno.test("GA payment writes open only for explicit affirmative values", () => {
   }
 });
 
+Deno.test("Teams subscription checkout defaults closed independently of general payment GA", () => {
+  for (const value of ["", "false", "0", "no", "enabled", "TRUE-ish"]) {
+    assertEquals(teamsSubscriptionCheckoutEnabled(value), false);
+  }
+});
+
+Deno.test("Teams subscription checkout opens only for explicit affirmative values", () => {
+  for (const value of ["true", "TRUE", "1", "yes", " Yes "]) {
+    assertEquals(teamsSubscriptionCheckoutEnabled(value), true);
+  }
+});
 
 Deno.test("GA advanced authoring defaults closed for empty or invalid values", () => {
   for (const value of ["", "false", "0", "no", "enabled"]) {
@@ -26,7 +37,6 @@ Deno.test("GA advanced authoring opens only for explicit affirmative values", ()
   }
 });
 
-
 Deno.test("GA specialized authoring defaults closed for empty or invalid values", () => {
   for (const value of ["", "false", "0", "no", "enabled"]) {
     assertEquals(specializedAuthoringEnabled(value), false);
@@ -39,7 +49,6 @@ Deno.test("GA specialized authoring opens only for explicit affirmative values",
   }
 });
 
-
 Deno.test("GA publication mint defaults closed for empty or invalid values", () => {
   for (const value of ["", "false", "0", "no", "enabled"]) {
     assertEquals(publicationMintEnabled(value), false);
@@ -51,7 +60,6 @@ Deno.test("GA publication mint opens only for explicit affirmative values", () =
     assertEquals(publicationMintEnabled(value), true);
   }
 });
-
 
 Deno.test("qualified advanced book types accept only the controlled allow-list", () => {
   assertEquals(
@@ -77,13 +85,11 @@ Deno.test("only explicitly qualified advanced modes open", () => {
   assertEquals(advancedBookTypeEnabled("text", "false", ""), true);
 });
 
-
 Deno.test("qualification access is independent from public release allow-list", () => {
   assertEquals(qualificationBookTypeEnabled("academic", "academic,technical"), true);
   assertEquals(qualificationBookTypeEnabled("fiction", "academic,technical"), false);
   assertEquals(qualificationBookTypeEnabled("text", "text,academic"), false);
 });
-
 
 Deno.test("publishing-service billing defaults closed independently of payment writes", () => {
   for (const value of ["", "false", "0", "no", "enabled"]) {
@@ -97,7 +103,6 @@ Deno.test("publishing-service billing opens only for explicit affirmative values
   }
 });
 
-
 Deno.test("GA marketplace payments default closed independently of general payments", () => {
   for (const value of ["", "false", "0", "no", "enabled", "TRUE-ish"]) {
     assertEquals(marketplacePaymentsEnabled(value), false);
@@ -109,7 +114,6 @@ Deno.test("GA marketplace payments open only for explicit affirmative values", (
     assertEquals(marketplacePaymentsEnabled(value), true);
   }
 });
-
 
 Deno.test("GA marketplace payouts default closed independently of marketplace sales", () => {
   for (const value of ["", "false", "0", "no", "enabled", "TRUE-ish"]) {
