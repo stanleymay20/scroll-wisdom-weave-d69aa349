@@ -103,26 +103,17 @@ Additional specialized modes require their own mode-specific corpus before activ
 
 ## Human-review rubric
 
-Human reviewers score 1.0–10.0 on:
+The empirical campaign uses the existing provider-qualification reviewer contract; it does not introduce a parallel scoring schema. Human reviewers score 0.0–10.0 on:
 
-- content integrity and factual responsibility;
-- coherence and whole-book continuity;
-- depth and intellectual usefulness;
-- prose quality and naturalness;
-- structure and pacing;
-- audience fit and pedagogy where applicable;
-- originality/non-formulaic treatment;
-- publication usability (how much human repair remains).
+- `contentIntegrity` — factual integrity for nonfiction; internal truth and continuity for fiction;
+- `coherence` — chapter-to-chapter logic, progression, contradictions and repetition;
+- `typeFidelity` — whether the complete result genuinely behaves like the declared book type;
+- `readerValue` — depth, usefulness, engagement, comprehension, pedagogy and fitness for the target reader;
+- `editorialPolish` — prose naturalness, pacing, structure, clarity, formatting, non-formulaic treatment and readiness for professional publication.
 
-A reviewer must also record:
+The existing qualification collector computes the arithmetic mean and preserves the weakest dimension. A reviewer also records their identity/controlled reviewer reference and the number of critical issues. Review notes or excerpts supporting unusually low/high scores should be retained with the review evidence without changing the collector's canonical five-dimension schema.
 
-- critical issues count;
-- major issues count;
-- representative excerpts supporting low scores;
-- whether they would publish the manuscript after only normal copyediting;
-- whether the manuscript visibly reads like unedited AI output.
-
-A sample fails if any critical issue exists, any dimension is below 9.0, or overall is below 9.5.
+A sample fails human review if any critical issue exists, any dimension is below 9.0, or the computed mean is below 9.5.
 
 ## Tier semantics
 
