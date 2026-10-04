@@ -132,6 +132,35 @@ BEGIN
     RAISE EXCEPTION 'anon can execute set_platform_fee';
   END IF;
 
+  -- Publishing certificates are immutable evidence from the browser's point of
+  -- view. Issuance/revocation belongs to trusted server workflows only.
+  IF to_regclass('public.publishing_certificates') IS NULL THEN
+    RAISE EXCEPTION 'publishing_certificates missing';
+  END IF;
+  IF has_table_privilege('anon','public.publishing_certificates','INSERT')
+     OR has_table_privilege('anon','public.publishing_certificates','UPDATE')
+     OR has_table_privilege('anon','public.publishing_certificates','DELETE')
+     OR has_table_privilege('authenticated','public.publishing_certificates','INSERT')
+     OR has_table_privilege('authenticated','public.publishing_certificates','UPDATE')
+     OR has_table_privilege('authenticated','public.publishing_certificates','DELETE') THEN
+    RAISE EXCEPTION 'browser role can mutate publishing_certificates';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname='public'
+      AND tablename='publishing_certificates'
+      AND cmd IN ('INSERT','UPDATE','DELETE','ALL')
+      AND roles && ARRAY['public'::name,'anon'::name,'authenticated'::name]
+  ) THEN
+    RAISE EXCEPTION 'browser/public publishing certificate write policy remains';
+  END IF;
+  IF NOT has_table_privilege('service_role','public.publishing_certificates','INSERT')
+     OR NOT has_table_privilege('service_role','public.publishing_certificates','UPDATE')
+     OR NOT has_table_privilege('service_role','public.publishing_certificates','DELETE') THEN
+    RAISE EXCEPTION 'service_role lacks publishing certificate mutation authority';
+  END IF;
+
   -- Public read is allowed for study music; all writes must remain server-owned.
   IF NOT EXISTS (
     SELECT 1
