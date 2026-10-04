@@ -4,6 +4,7 @@ const checkout = readFileSync("supabase/functions/create-book-checkout/index.ts"
 const webhook = readFileSync("supabase/functions/stripe-webhook/index.ts", "utf8");
 const replay = readFileSync("supabase/functions/admin-webhook-replay/index.ts", "utf8");
 const adminRefund = readFileSync("supabase/functions/admin-refund-purchase/index.ts", "utf8");
+const payoutSettlement = readFileSync("supabase/functions/settle-creator-payouts/index.ts", "utf8");
 const adminCors = readFileSync("supabase/functions/_shared/admin-cors.ts", "utf8");
 const claimMigration = readFileSync(
   "supabase/migrations/20260923030500_stripe_webhook_claim_terminal_hardening.sql",
@@ -145,6 +146,72 @@ requireText(
   adminRefund,
   "idempotencyKey:",
   "Stripe refund idempotency option",
+);
+requireText(
+  adminRefund,
+  "stripeRefundAmount",
+  "tax-inclusive Stripe refund amount",
+);
+requireText(
+  adminRefund,
+  "remainingStripeCash",
+  "final-refund tax rounding convergence",
+);
+requireText(
+  adminRefund,
+  "stripe_refund_amount_cents",
+  "stable tax-inclusive Stripe refund amount persisted before external call",
+);
+requireText(
+  adminRefund,
+  "stableAmountError",
+  "refund aborts when stable Stripe cash amount cannot be persisted",
+);
+requireText(
+  adminRefund,
+  "_refund_amount_cents: refundAmount",
+  "creator ledger remains pre-tax on admin refunds",
+);
+
+requireText(
+  payoutSettlement,
+  "reserve_creator_payout",
+  "creator payout atomic reservation",
+);
+requireText(
+  payoutSettlement,
+  "list_creator_payout_candidates",
+  "retry-aware payout candidate selection",
+);
+requireText(
+  payoutSettlement,
+  "isDefinitiveTransferRejection",
+  "ambiguous Stripe payout outcomes preserve reservations",
+);
+requireText(
+  payoutSettlement,
+  "creator_payout_transfer_ambiguous",
+  "ambiguous payout telemetry",
+);
+requireText(
+  payoutSettlement,
+  "stripe.transfers.create",
+  "Stripe Connect transfer execution",
+);
+requireText(
+  payoutSettlement,
+  "idempotencyKey: reservation.idempotency_key",
+  "creator payout Stripe idempotency",
+);
+requireText(
+  payoutSettlement,
+  "mark_creator_payout_transferred",
+  "creator payout acknowledgement",
+);
+requireText(
+  payoutSettlement,
+  "marketplacePayoutsEnabled()",
+  "creator payout independent GA gate",
 );
 requireText(
   adminRefund,

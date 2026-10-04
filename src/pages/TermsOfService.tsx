@@ -115,16 +115,17 @@ export default function TermsOfService() {
                 <div className="space-y-4 text-muted-foreground">
                   <p>
                     <strong className="text-foreground">What we charge for.</strong> ScrollLibrary sells
-                    monthly subscription plans and one-off purchases of individual titles. Current prices
-                    are shown on the Pricing page and at checkout, in the currency displayed at checkout.
-                    Prices may exclude sales tax, VAT or equivalent, which is added at checkout where
-                    applicable.
+                    monthly or annual subscription plans, usage add-ons, publishing services, and individual
+                    marketplace titles when the relevant commercial surface is enabled. Current prices are shown
+                    on the Pricing page and at checkout, in the currency displayed at checkout. Prices may exclude
+                    sales tax, VAT or equivalent, which is added at checkout where applicable.
                   </p>
                   <p>
                     <strong className="text-foreground">Billing.</strong> Subscription plans are billed
-                    monthly in advance and renew automatically until you cancel. Payments are processed by
-                    Stripe; we do not receive or store your full card details. If a renewal payment fails,
-                    paid features may be suspended until payment succeeds.
+                    in advance on the monthly or annual interval selected at checkout and renew automatically
+                    on that interval until you cancel. Payments are processed by Stripe; we do not receive or
+                    store your full card details. If a renewal payment fails, paid features may be suspended
+                    until payment succeeds.
                   </p>
                   <p>
                     <strong className="text-foreground">Cancelling a subscription.</strong> You can cancel

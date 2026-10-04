@@ -96,6 +96,8 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-release-schedule-entitlement-rls.sql
       - name: Assert the payout write surface stays server-owned
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-payout-surface.sql
+      - name: Assert creator payout reservation and retry lifecycle
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-creator-payout-settlement.sql
       - name: Assert purchase, ledger, entitlement and refund lifecycle
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-commerce-ledger-lifecycle.sql
       - name: Assert Stripe webhook claim, dead-letter and replay lifecycle
@@ -198,6 +200,9 @@ jobs:
           deno check supabase/functions/stripe-webhook/index.ts
           deno check supabase/functions/stripe-connect-onboarding/index.ts
           deno check supabase/functions/create-book-checkout/index.ts
+          deno check supabase/functions/admin-refund-purchase/index.ts
+          deno check supabase/functions/settle-creator-payouts/index.ts
+          deno check supabase/functions/creator-earnings-summary/index.ts
           deno check supabase/functions/admin-force-stripe-resync/index.ts
       - name: Type-check authority and metered usage Edge Functions
         run: |
