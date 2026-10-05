@@ -55,7 +55,7 @@ export function UsageInsightsPanel() {
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <Sparkles className="h-4 w-4 text-primary" />
-          This Month&apos;s Usage
+          This UTC Month&apos;s Usage
         </CardTitle>
         <Button variant="ghost" size="sm" onClick={refresh} disabled={loading}>
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -71,7 +71,7 @@ export function UsageInsightsPanel() {
         {snapshot && (
           <>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Period: {snapshot.month}</span>
+              <span>UTC period: {snapshot.month}</span>
               <Badge variant="secondary">{SUBSCRIPTION_TIERS[snapshot.plan].name}</Badge>
             </div>
             <UsageRow
@@ -102,6 +102,9 @@ export function UsageInsightsPanel() {
               limit={snapshot.audioCreditsLimit}
               unit="narration-min eq."
             />
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              The server-authoritative usage period is the UTC calendar month. Base monthly allowances and one-time usage packs reset at UTC month-end; unused add-on units do not roll over.
+            </p>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               One audio allowance unit equals about one standard narration minute. Interactive voice, when enabled, consumes the same pool at a higher weighted rate.
             </p>

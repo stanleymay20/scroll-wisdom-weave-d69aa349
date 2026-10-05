@@ -121,7 +121,7 @@ export default function Pricing() {
     } else if (searchParams.get("order_success") === "true") {
       toast({
         title: "Purchase received",
-        description: "Your purchase is being confirmed from Stripe before the entitlement is applied.",
+        description: "Your purchase is being confirmed from Stripe before the entitlement is applied. If this was a usage pack, it applies only to the current UTC calendar month and will reset at UTC month-end.",
       });
       setSearchParams({}, { replace: true });
     } else if (searchParams.get("order_canceled") === "true") {
@@ -421,7 +421,7 @@ export default function Pricing() {
                         <p className="text-xs text-muted-foreground">
                           {recurringSeat
                             ? "Recurring Teams seat. Seat billing opens with organization seat management."
-                            : "One-time compute pack applied to the current billing month after Stripe confirms payment."}
+                            : "One-time compute pack applied to the current UTC calendar month after Stripe confirms payment. It will reset at UTC month-end; unused add-on units do not roll over."}
                         </p>
                         <Button
                           size="sm"
