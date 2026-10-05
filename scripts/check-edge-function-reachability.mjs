@@ -64,6 +64,7 @@ const externalEntrypoints = new Map([
   ["materialize-release-schedules", "scheduler/operational fallback endpoint"],
   ["settle-creator-payouts", "admin-triggered creator payout settlement endpoint"],
   ["resolve-scroll-id", "public ScrollLibrary identifier-resolution API"],
+  ["mcp", "authenticated MCP/OAuth external endpoint"],
 ]);
 
 const failures = [];

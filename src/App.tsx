@@ -28,6 +28,7 @@ import { FEATURES } from "@/lib/config";
 import Index from "./pages/Index";
 
 const Auth = lazy(() => import("./pages/Auth"));
+const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const BookDetail = lazy(() => import("./pages/BookDetail"));
 const Explore = lazy(() => import("./pages/Explore"));
@@ -186,6 +187,7 @@ const App = () => (
                       <Routes>
                         <Route path="/" element={<Index />} />
                         <Route path="/auth" element={<Auth />} />
+                        <Route path="/oauth/consent" element={<OAuthConsent />} />
                         <Route path="/explore" element={<Explore />} />
                         <Route path="/generate" element={withRecovery('Generate', <ProtectedRoute><Generate /></ProtectedRoute>)} />
                         <Route path="/library" element={withRecovery('Library', <ProtectedRoute><Library /></ProtectedRoute>)} />
