@@ -23,14 +23,14 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: 2.9.6
-      - name: Regenerate frozen Edge dependency lock from every TypeScript entrypoint
+      - name: Regenerate Edge dependency lock from every TypeScript entrypoint
         shell: bash
         run: |
           set -euo pipefail
           cd supabase/functions
           mapfile -d '' entries < <(find . -type f -name '*.ts' -print0 | sort -z)
           test "${#entries[@]}" -gt 0
-          deno install --config deno.json --entrypoint --lockfile-only "${entries[@]}"
+          deno install --config deno.json --entrypoint --lockfile-only --frozen=false "${entries[@]}"
       - name: Verify only the Deno lock changed
         shell: bash
         run: |
