@@ -10,6 +10,14 @@ import { buildFictionContinuityContext, sanitizeFictionContract } from "../_shar
 import { buildChildrenSystemPrompt } from "../_shared/children-contract.ts";
 import { validateWorkbookStructure as validateWorkbookContract } from "../_shared/authority-validator.ts";
 import { BILLING_PLAN_LIMITS, billingPlanFor } from "../_shared/billing-plans.ts";
+import {
+  buildMaterialModelProvenance,
+  floorSafeModelChain,
+  mergeGenerationOutline,
+  routeFloorModel,
+  type GenerationRoute,
+  type MaterialModelStageRecord,
+} from "../_shared/generation-model-floor.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,33 +51,6 @@ class FigureImageError extends Error {
     this.name = "FigureImageError";
   }
 }
-
-const getModelForPlan = (plan: string): string => {
-  switch (plan) {
-    case "prophet_tier":
-    case "premium":
-    case "student":
-      return "google/gemini-2.5-flash";
-    case "free":
-    default:
-      return "google/gemini-2.5-flash-lite";
-  }
-};
-
-// Publication-quality (Chief Editor) rewrite routing — server-owned, derived from the
-// authenticated user's active subscription tier. Deliberately has a higher floor than
-// normal generation so final polishing is never performed by Flash Lite.
-const getRewriteModelForPlan = (plan: string): string => {
-  switch (plan) {
-    case "prophet_tier":
-    case "premium":
-      return "google/gemini-2.5-pro";
-    case "student":
-    case "free":
-    default:
-      return "google/gemini-2.5-flash";
-  }
-};
 
 // ===========================================
 // SCROLLLIBRARY GENERATION ARCHITECTURE v3.0
@@ -2170,12 +2151,14 @@ serve(async (req) => {
     const userPlan = billingPlanFor(
       (subscription?.status === 'active' && subscription?.tier) ? subscription.tier : "free",
     );
-    // Routine drafting uses the cost-efficient model. Chief Editor rewrites keep
-    // their server-owned quality floor and can still use Pro on eligible tiers.
-    const baseModel = getModelForPlan(userPlan);
-    const generationModel = isChiefEditorRewrite ? getRewriteModelForPlan(userPlan) : baseModel;
+    // Routine drafting and Chief Editor rewrites use a server-owned material-model floor.
+    // Retries and any manuscript-mutating refinement pass must stay at or above this floor.
+    const generationRoute: GenerationRoute = isChiefEditorRewrite ? "chief_editor" : "routine";
+    const baseModel = routeFloorModel(userPlan, "routine");
+    const generationModel = routeFloorModel(userPlan, generationRoute);
+    const materialModelStages: MaterialModelStageRecord[] = [];
     const maxWordCount = BILLING_PLAN_LIMITS[userPlan].maxWordsPerChapter;
-    console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Model: ${generationModel}${isChiefEditorRewrite && generationModel !== baseModel ? ` (chief-editor rewrite floor, base ${baseModel})` : ''} | Admin: ${isAdmin}`);
+    console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Route: ${generationRoute} | Model floor: ${generationModel}${isChiefEditorRewrite && generationModel !== baseModel ? ` (base ${baseModel})` : ''} | Admin: ${isAdmin}`);
 
     // ===========================================
     // INPUT NORMALIZATION — Defensive layer for multi-path orchestration
@@ -2215,15 +2198,17 @@ serve(async (req) => {
     
     // Check if this is a regeneration and enforce edit intent requirement
     let existingContent: string | null = null;
+    let existingGenerationOutline: unknown = null;
     
     if (chapterId) {
       const { data: existingChapter } = await supabase
         .from("chapters")
-        .select("content, is_generated")
+        .select("content, is_generated, generation_outline")
         .eq("id", chapterId)
         .single();
       
       existingContent = existingChapter?.content ?? null;
+      existingGenerationOutline = existingChapter?.generation_outline ?? null;
       const wasGenerated = existingChapter?.is_generated || false;
       if (!advancedAuthoringEnabled() && (wasGenerated || editIntent)) {
         return new Response(JSON.stringify({ error: "Chapter rewrites are outside the current GA scope.", code: "GA_ADVANCED_AUTHORING_DISABLED" }), {
@@ -3135,6 +3120,13 @@ Return JSON only:
       comicMetadata.panelCount = panels.length;
       comicMetadata.dialogueCount = comicValidation?.totalDialogueCount || 0;
       comicMetadata.generatedAt = new Date().toISOString();
+      materialModelStages.push({ stage: "generation", model: generationModel });
+      const materialModelProvenance = buildMaterialModelProvenance({
+        plan: userPlan,
+        route: generationRoute,
+        routeFloorModel: generationModel,
+        acceptedStages: materialModelStages,
+      });
 
       await saveGeneratedChapter({
           content: finalComicContent,
@@ -3142,6 +3134,7 @@ Return JSON only:
           is_generated: true,
           updated_at: new Date().toISOString(),
           comic_metadata: comicMetadata,
+          generation_outline: mergeGenerationOutline(existingGenerationOutline, materialModelProvenance),
         });
 
       // Count total dialogues from the validated content
@@ -3151,6 +3144,7 @@ Return JSON only:
         success: true,
         wordCount: actualWordCount,
         provider: 'Lovable AI (Comic)',
+        materialModelProvenance,
         panelCount: panels.length,
         dialogueCount: finalDialogueCount,
         dialoguePerPanel: comicValidation?.panelDialogues?.map(p => ({
@@ -3243,18 +3237,27 @@ Return JSON only:
       
       const finalContent = frontMatter + workbookContent;
       const actualWordCount = finalContent.split(/\s+/).filter((w: string) => w.length > 0).length;
+      materialModelStages.push({ stage: "generation", model: generationModel });
+      const materialModelProvenance = buildMaterialModelProvenance({
+        plan: userPlan,
+        route: generationRoute,
+        routeFloorModel: generationModel,
+        acceptedStages: materialModelStages,
+      });
 
       await saveGeneratedChapter({
           content: finalContent,
           word_count: actualWordCount,
           is_generated: true,
           updated_at: new Date().toISOString(),
+          generation_outline: mergeGenerationOutline(existingGenerationOutline, materialModelProvenance),
         });
 
       return new Response(JSON.stringify({
         success: true,
         wordCount: actualWordCount,
         provider: 'Lovable AI (Workbook)',
+        materialModelProvenance,
         validation: {
           valid: workbookValidation.valid,
           warnings: workbookValidation.warnings.length,
@@ -4749,31 +4752,24 @@ BEGIN:`;
       units: requestedTextWords,
     };
 
-    // Retry logic for transient gateway errors (502, 503, 504) and rate limits (429)
-    // Model fallback chain for 429 rate limits
-    const FALLBACK_MODELS = [
-      generationModel,
-      "google/gemini-2.5-flash",
-      "google/gemini-2.5-flash-lite",
-    ];
-    // Deduplicate: if generationModel is already in the chain, skip it
-    const modelChain = [...new Set(FALLBACK_MODELS)];
-    
+    // Retry transient provider failures without crossing the server-owned route floor.
+    // No lower-quality fallback is qualified for manuscript generation.
+    const modelChain = floorSafeModelChain(userPlan, generationRoute);
     const MAX_RETRIES = 4;
     let response: Response | null = null;
     let lastErr = "";
-    let currentModelIdx = 0;
-    
+    let lastStatus = 0;
+    let successfulGenerationModel: string | null = null;
+
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      const activeModel = modelChain[Math.min(currentModelIdx, modelChain.length - 1)];
-      
+      const activeModel = modelChain[0];
+
       if (attempt > 0) {
-        // Longer backoff for 429 (rate limit), shorter for gateway errors
-        const delay = lastErr.includes("rate_limited") ? 5000 * attempt : 2000 * attempt;
-        console.log(`[GENERATE-CHAPTER] Retry attempt ${attempt + 1} with model ${activeModel} after ${delay}ms...`);
+        const delay = lastStatus === 429 ? 5000 * attempt : 2000 * attempt;
+        console.log(`[GENERATE-CHAPTER] Retry attempt ${attempt + 1} on route floor ${activeModel} after ${delay}ms...`);
         await new Promise(r => setTimeout(r, delay));
       }
-      
+
       response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -4788,12 +4784,16 @@ BEGIN:`;
           ],
         }),
       });
-      if (response.ok) break;
+      if (response.ok) {
+        successfulGenerationModel = activeModel;
+        break;
+      }
+
+      lastStatus = response.status;
       const errText = await response.text();
       lastErr = errText.slice(0, 300);
       console.error(`[GENERATE-CHAPTER] AI gateway error (attempt ${attempt + 1}, model ${activeModel}):`, response.status, lastErr);
 
-      // Credit exhaustion — terminate immediately, never retry. Surface 402 to client.
       if (response.status === 402) {
         await refundTextReservation();
         return new Response(
@@ -4803,23 +4803,31 @@ BEGIN:`;
       }
 
       if (response.status === 429) {
-        // Rate limited — try falling back to a cheaper/faster model
-        currentModelIdx++;
-        console.log(`[GENERATE-CHAPTER] Rate limited (429), falling back to next model in chain (idx ${currentModelIdx})`);
+        console.log(`[GENERATE-CHAPTER] Rate limited (429); retrying the same qualified route floor ${activeModel}`);
         continue;
       }
-      
-      // Retry on transient gateway errors
+
       if ([502, 503, 504].includes(response.status)) {
         continue;
       }
-      
-      // Non-retryable error — bail immediately
+
       throw new Error(`AI generation failed (${response.status}): ${lastErr}`);
     }
 
     if (!response || !response.ok) {
-      throw new Error(`AI generation failed after ${MAX_RETRIES} retries: ${lastErr}`);
+      await refundTextReservation();
+      const terminalStatus = lastStatus === 429 ? 429 : 503;
+      return new Response(JSON.stringify({
+        error: terminalStatus === 429
+          ? "AI provider is temporarily rate limited. Please retry shortly."
+          : "AI provider is temporarily unavailable. Please retry shortly.",
+        code: terminalStatus === 429 ? "AI_RATE_LIMITED" : "AI_PROVIDER_UNAVAILABLE",
+        retryable: true,
+        modelFloor: generationModel,
+      }), {
+        status: terminalStatus,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Retry up to 2 more times if the AI returns an empty/malformed response
@@ -4830,7 +4838,7 @@ BEGIN:`;
         console.log(`[GENERATE-CHAPTER] Empty response retry ${emptyAttempt}/${EMPTY_RETRIES}, re-calling AI...`);
         await new Promise(r => setTimeout(r, 3000 * emptyAttempt));
         
-        const retryModel = modelChain[Math.min(currentModelIdx, modelChain.length - 1)];
+        const retryModel = modelChain[0];
         response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
           headers: {
@@ -4846,9 +4854,11 @@ BEGIN:`;
           }),
         });
         if (!response.ok) {
+          lastStatus = response.status;
           console.error(`[GENERATE-CHAPTER] Empty-retry AI call failed:`, response.status);
           continue;
         }
+        successfulGenerationModel = retryModel;
       }
 
       const responseText = await response!.text();
@@ -4871,8 +4881,18 @@ BEGIN:`;
     }
 
     if (!chapterContent) {
-      throw new Error("AI returned empty response after multiple retries — please try again");
+      await refundTextReservation();
+      return new Response(JSON.stringify({
+        error: "AI returned no usable chapter content after multiple attempts. Please retry shortly.",
+        code: "AI_EMPTY_RESPONSE",
+        retryable: true,
+        modelFloor: generationModel,
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+    materialModelStages.push({ stage: "generation", model: successfulGenerationModel ?? generationModel });
 
     let finalContent = chapterContent;
 
@@ -4904,7 +4924,7 @@ BEGIN:`;
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash-lite",
+            model: generationModel,
             messages: [
               { role: "system", content: `You are an Intellectual Stress-Testing Editor.
 
@@ -4998,6 +5018,7 @@ ${finalContent.slice(0, 30000)}` }
           if (stressedContent.length > finalContent.length * 0.7 && stressedContent.length < finalContent.length * 1.15 && stressedContent.length > 1000) {
             console.log(`[GENERATE-CHAPTER] Stress-test pass complete: ${finalContent.length} → ${stressedContent.length} chars`);
             finalContent = stressedContent;
+            materialModelStages.push({ stage: "stress_test", model: generationModel });
           } else {
             console.log(`[GENERATE-CHAPTER] Stress-test result rejected (length: ${stressedContent.length} vs original: ${finalContent.length})`);
           }
@@ -5014,7 +5035,7 @@ ${finalContent.slice(0, 30000)}` }
 
     // ===========================================
     // PHASE 4: LIGHTWEIGHT COMPRESSION SECOND PASS
-    // Flash-lite pass for rhythm variation and compression
+    // Route-floor pass for rhythm variation and compression
     // Adds ~15-20% cost, +6-10 quality points
     // Skip for comics, workbooks, children's books (structure-sensitive)
     // ===========================================
@@ -5032,7 +5053,7 @@ ${finalContent.slice(0, 30000)}` }
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash-lite",
+            model: generationModel,
             messages: [
               { role: "system", content: `You are an editorial refinement engine for "${effectiveBookType}" content. Your ONLY job:
 1. Remove sentences that restate what was already said (redundancy)
@@ -5072,6 +5093,7 @@ Return ONLY the improved chapter text. No preamble.` },
           // Only use if compression didn't destroy the content (>60% of original)
           if (compressed.length > finalContent.length * 0.6 && compressed.length > 1000) {
             finalContent = compressed;
+            materialModelStages.push({ stage: "compression", model: generationModel });
             console.log(`[GENERATE-CHAPTER] Compression pass complete: ${chapterContent.length} → ${finalContent.length} chars (${Math.round((1 - finalContent.length / chapterContent.length) * 100)}% reduction)`);
           } else {
             console.log(`[GENERATE-CHAPTER] Compression result rejected (too short: ${compressed.length} vs ${finalContent.length})`);
@@ -5883,6 +5905,12 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
       }
     }
 
+    const materialModelProvenance = buildMaterialModelProvenance({
+      plan: userPlan,
+      route: generationRoute,
+      routeFloorModel: generationModel,
+      acceptedStages: materialModelStages,
+    });
     const updateData: any = {
       content: finalContent,
       word_count: actualWordCount,
@@ -5890,6 +5918,7 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
       updated_at: new Date().toISOString(),
       academic_mode: academicMode,
       citation_style: academicMode ? citationStyle : null,
+      generation_outline: mergeGenerationOutline(existingGenerationOutline, materialModelProvenance),
     };
 
     // Persist research sources whenever the research workflow produced them —
@@ -6014,6 +6043,7 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
       success: true,
       wordCount: actualWordCount,
       provider: 'Lovable AI',
+      materialModelProvenance,
       academicMode,
       sourceCount: researchResult?.references.length || 0,
       contract6: {
