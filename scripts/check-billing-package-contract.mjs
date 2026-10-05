@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 // Source-only billing architecture contract. Runs in ordinary CI without Stripe secrets.
 const subscription = readFileSync("src/lib/subscription.ts", "utf8");
 const pricing = readFileSync("src/pages/Pricing.tsx", "utf8");
+const usageInsights = readFileSync("src/components/subscription/UsageInsightsPanel.tsx", "utf8");
 const clientConfig = readFileSync("src/lib/config.ts", "utf8");
 const seller = readFileSync("src/pages/Sell.tsx", "utf8");
 const ownerControls = readFileSync("src/components/books/BookOwnerControls.tsx", "utf8");
@@ -59,6 +60,19 @@ requireText(pricing, "Usage add-ons", "usage add-on section");
 requireText(pricing, "Marketplace fees", "transparent marketplace fees");
 rejectText(pricing, "CREATOR_SUBSCRIPTION_TIERS", "legacy publisher tiers exposed on pricing");
 rejectText(pricing, "Commercial publishing rights", "commercial rights sold as a plan privilege");
+
+// One-time compute packs deliberately share the server-owned UTC calendar-month
+// ledger. Customer-facing pricing, checkout return copy and the usage meter must
+// describe that same validity window rather than implying subscription-anniversary
+// validity. Keep the server calculation pinned too so copy cannot drift from authority.
+requireText(orderCheckout, "const benefitMonth = new Date().toISOString().slice(0, 7);", "usage packs use UTC calendar month authority");
+requireText(pricing, "current UTC calendar month", "pricing discloses UTC calendar-month validity");
+requireText(pricing, "reset at UTC month-end", "pricing discloses add-on reset boundary");
+requireText(pricing, "If this was a usage pack", "checkout return explains usage-pack validity conditionally");
+rejectText(pricing, "current billing month", "usage packs described as subscription billing-month benefits");
+requireText(usageInsights, "server-authoritative usage period is the UTC calendar month", "usage meter states authoritative period");
+requireText(usageInsights, "one-time usage packs reset at UTC month-end", "usage meter states add-on reset boundary");
+requireText(usageInsights, "unused add-on units do not roll over", "usage meter states non-rollover policy");
 
 // Commercial GA must be independently switchable from specialized-generation
 // qualification and from the old PMF-only experimental surface.
@@ -177,4 +191,4 @@ requireText(voiceGate, '.from("subscriptions")', "voice quota resolves server su
 requireText(voiceGate, "current_period_end", "voice quota rejects expired local subscription periods");
 rejectText(voiceGate, "profile?.plan", "voice quota falls back to cached profile plan");
 
-console.log("Billing package contract: PASS (commercial GA separated; Teams fail-closed; authoritative entitlements; economic ladder metered; tax-aware checkout)");
+console.log("Billing package contract: PASS (commercial GA separated; Teams fail-closed; authoritative entitlements; economic ladder metered; tax-aware checkout; UTC add-on validity aligned)");
