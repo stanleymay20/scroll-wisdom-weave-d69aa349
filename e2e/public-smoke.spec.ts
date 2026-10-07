@@ -30,6 +30,38 @@ for (const [path, heading] of [
   });
 }
 
+test("Kingdom Wealth companion downloads are generated for unauthenticated readers", async ({ page }) => {
+  await page.goto("/kingdom-wealth/tools");
+  await expect(page.getByRole("heading", { level: 1, name: /companion tools/i })).toBeVisible();
+
+  for (const [buttonName, filename] of [
+    [/download workbook/i, "KINGDOM_WEALTH_STEWARDS_WORKBOOK_CSV_PACK.zip"],
+    [/download guide/i, "KINGDOM_WEALTH_12_WEEK_GROUP_GUIDE.md"],
+    [/download pilot pack/i, "KINGDOM_WEALTH_COMPANION_PILOT_PACK.zip"],
+  ] as const) {
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: buttonName }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe(filename);
+    expect(await download.failure()).toBeNull();
+  }
+});
+
+test("Kingdom Wealth companion tools fit a mobile viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/kingdom-wealth/tools");
+
+  await expect(page.getByRole("heading", { level: 1, name: /companion tools/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /download workbook/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /download guide/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /download pilot pack/i })).toBeVisible();
+
+  const hasHorizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+  );
+  expect(hasHorizontalOverflow).toBe(false);
+});
+
 test("protected routes fail closed to authentication", async ({ page }) => {
   await page.goto("/library");
   await expect(page).toHaveURL(/\/auth$/);
