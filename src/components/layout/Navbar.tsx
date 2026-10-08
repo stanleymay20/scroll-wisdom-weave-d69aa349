@@ -73,7 +73,7 @@ export function Navbar() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    toast({ title: "Signed out", description: "You have been signed out successfully." });
+    toast({ title: t("nav.signedOutTitle"), description: t("nav.signedOutDesc") });
     navigate("/");
   };
 
@@ -91,19 +91,19 @@ export function Navbar() {
           </Link>
 
           <div className="hidden md:flex items-center gap-6 lg:gap-8">
-            <Link to="/explore" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Explore</Link>
-            <Link to="/library" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.library')}</Link>
-            <Link to="/generate" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.generate')}</Link>
-            <Link to="/sell" className="text-sm text-primary hover:text-primary/80 transition-colors font-semibold">Publish</Link>
-            <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Pricing</Link>
+            <Link to="/explore" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t("nav.explore")}</Link>
+            <Link to="/library" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t("nav.library")}</Link>
+            <Link to="/generate" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t("nav.generate")}</Link>
+            <Link to="/sell" className="text-sm text-primary hover:text-primary/80 transition-colors font-semibold">{t("nav.publish")}</Link>
+            <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t("nav.pricing")}</Link>
           </div>
 
           <div className="hidden md:flex items-center gap-2">
             <LanguageSwitcher />
-            <Button variant="ghost" size="icon" onClick={() => navigate('/explore')} aria-label="Search">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/explore')} aria-label={t("nav.search")}>
               <Search className="h-5 w-5" />
             </Button>
-            
+
             {user && <NotificationBell />}
             {user ? (
               <DropdownMenu>
@@ -117,95 +117,98 @@ export function Navbar() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 bg-popover/95 backdrop-blur-xl">
                   <div className="px-3 py-2">
-                    <p className="text-sm font-medium truncate">{profile?.full_name || "User"}</p>
+                    <p className="text-sm font-medium truncate">{profile?.full_name || t("nav.user")}</p>
                     <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer">
-                    <User className="mr-2 h-4 w-4" />{t('nav.profile')}
+                    <User className="mr-2 h-4 w-4" />{t("nav.profile")}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer">
-                    <Settings className="mr-2 h-4 w-4" />{t('nav.settings')}
+                    <Settings className="mr-2 h-4 w-4" />{t("nav.settings")}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/help")} className="cursor-pointer">
-                    <HelpCircle className="mr-2 h-4 w-4" />{t('footer.help')}
+                    <HelpCircle className="mr-2 h-4 w-4" />{t("footer.help")}
                   </DropdownMenuItem>
                   {isAdmin && (
                     <DropdownMenuItem onClick={() => navigate("/admin")} className="cursor-pointer text-primary">
-                      <Shield className="mr-2 h-4 w-4" />Admin Panel
+                      <Shield className="mr-2 h-4 w-4" />{t("nav.admin")}
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive focus:text-destructive">
-                    <LogOut className="mr-2 h-4 w-4" />{t('nav.signout')}
+                    <LogOut className="mr-2 h-4 w-4" />{t("nav.signout")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
               <Button size="sm" onClick={() => navigate('/auth')}>
-                <User className="h-4 w-4 mr-1.5" />{t('nav.signin')}
+                <User className="h-4 w-4 mr-1.5" />{t("nav.signin")}
               </Button>
             )}
           </div>
 
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)} aria-label="Toggle menu">
-            {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
+          <div className="md:hidden flex items-center gap-1">
+            <LanguageSwitcher />
+            <Button variant="ghost" size="icon" onClick={() => setIsMenuOpen(!isMenuOpen)} aria-label="Toggle menu">
+              {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
+          </div>
         </div>
       </div>
 
       <AnimatePresence>
         {isMenuOpen && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }} 
-            animate={{ opacity: 1, height: "auto" }} 
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
             className="md:hidden border-t border-border/50 bg-background/95 backdrop-blur-xl"
           >
             <div className="container mx-auto px-4 py-4 space-y-1">
               <Link to="/explore" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                Explore
+                {t("nav.explore")}
               </Link>
               <Link to="/library" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                {t('nav.library')}
+                {t("nav.library")}
               </Link>
               <Link to="/generate" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                Create
+                {t("nav.generate")}
               </Link>
               <Link to="/sell" className="flex items-center gap-3 py-3 px-3 text-primary font-semibold rounded-lg hover:bg-primary/5 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                Publish
+                {t("nav.publish")}
               </Link>
               <Link to="/pricing" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                Pricing
+                {t("nav.pricing")}
               </Link>
-              
+
               <div className="border-t border-border/50 pt-3 mt-3">
                 {user ? (
                   <>
                     <Link to="/profile" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
                       <User className="h-4 w-4 text-muted-foreground" />
-                      {t('nav.profile')}
+                      {t("nav.profile")}
                     </Link>
                     <Link to="/settings" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
                       <Settings className="h-4 w-4 text-muted-foreground" />
-                      {t('nav.settings')}
+                      {t("nav.settings")}
                     </Link>
                     {isAdmin && (
                       <Link to="/admin" className="flex items-center gap-3 py-3 px-3 text-primary font-medium rounded-lg hover:bg-primary/5 transition-colors" onClick={() => setIsMenuOpen(false)}>
                         <Shield className="h-4 w-4" />
-                        Admin Panel
+                        {t("nav.admin")}
                       </Link>
                     )}
                     <Button variant="outline" className="w-full mt-3" onClick={() => { setIsMenuOpen(false); handleSignOut(); }}>
                       <LogOut className="h-4 w-4 mr-2" />
-                      {t('nav.signout')}
+                      {t("nav.signout")}
                     </Button>
                   </>
                 ) : (
                   <Button className="w-full" onClick={() => { setIsMenuOpen(false); navigate('/auth'); }}>
                     <User className="h-4 w-4 mr-2" />
-                    {t('nav.signin')}
+                    {t("nav.signin")}
                   </Button>
                 )}
               </div>
