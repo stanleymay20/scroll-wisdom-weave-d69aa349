@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface RecentBook {
   bookId: string;
@@ -22,6 +23,7 @@ interface RecentBook {
 }
 
 export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
+  const { t } = useLanguage();
   const [recentBook, setRecentBook] = useState<RecentBook | null>(null);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -78,7 +80,6 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
     fetchRecentBook();
   }, []);
 
-  // Don't render if no user or no recent book
   if (!loading && (!userId || !recentBook)) {
     return null;
   }
@@ -108,14 +109,13 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
     <div className="bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 rounded-2xl p-4 md:p-6 transition-all hover:border-primary/40">
       <div className="flex items-center gap-2 mb-4 text-primary">
         <Clock className="h-4 w-4 md:h-5 md:w-5" />
-        <span className="text-sm md:text-base font-medium">Continue Reading</span>
+        <span className="text-sm md:text-base font-medium">{t("library.continueReading")}</span>
       </div>
 
       <Link
         to={`/read/${recentBook.bookId}/${chapterToRead}`}
         className="flex gap-4 group"
       >
-        {/* Book Cover */}
         <div className="w-16 h-24 md:w-20 md:h-28 rounded-lg overflow-hidden flex-shrink-0 bg-muted border border-border/50 shadow-md">
           {recentBook.coverImageUrl ? (
             <img
@@ -130,7 +130,6 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
           )}
         </div>
 
-        {/* Book Info */}
         <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
           <div>
             <h3 className="font-semibold text-foreground truncate group-hover:text-primary transition-colors text-sm md:text-base">
@@ -143,19 +142,19 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
 
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Chapter {chapterToRead}</span>
-              <span>{Math.round(recentBook.progressPercent)}% complete</span>
+              <span>{t("reader.chapter")} {chapterToRead}</span>
+              <span>{Math.round(recentBook.progressPercent)}% {t("book.complete")}</span>
             </div>
             <Progress value={recentBook.progressPercent} className="h-1.5" />
           </div>
         </div>
 
-        {/* Resume Button */}
         <div className="flex items-center self-center">
           <Button
             variant="ghost"
             size="icon"
             className="h-10 w-10 rounded-full bg-primary/10 hover:bg-primary/20 text-primary"
+            aria-label={t("library.continueReading")}
           >
             <ChevronRight className="h-5 w-5" />
           </Button>
