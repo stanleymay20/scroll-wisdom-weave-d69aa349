@@ -2,14 +2,8 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, BookOpen, CheckCircle2, PenLine, Rocket, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
 import heroCinematicBook from "@/assets/hero-cinematic-book.png";
-
-const FEATURES = [
-  { icon: PenLine, title: "Create", desc: "Turn an idea into a structured, full-length book." },
-  { icon: CheckCircle2, title: "Learn", desc: "Read, assess understanding, and keep your work in one place." },
-  { icon: BookOpen, title: "Refine", desc: "Build a strong manuscript before advanced publishing workflows open." },
-  { icon: Rocket, title: "Publishing path", desc: "Advanced publishing tools unlock only after their GA validation gates pass." },
-];
 
 interface HeroSectionProps {
   onStartDemo: () => void;
@@ -17,6 +11,34 @@ interface HeroSectionProps {
 
 export function HeroSection({ onStartDemo: _onStartDemo }: HeroSectionProps) {
   const navigate = useNavigate();
+  const { t } = useLanguage();
+
+  const features = [
+    {
+      id: "create",
+      icon: PenLine,
+      title: t("home.current.featureCreateTitle"),
+      desc: t("home.current.featureCreateDesc"),
+    },
+    {
+      id: "learn",
+      icon: CheckCircle2,
+      title: t("home.current.featureLearnTitle"),
+      desc: t("home.current.featureLearnDesc"),
+    },
+    {
+      id: "refine",
+      icon: BookOpen,
+      title: t("home.current.featureRefineTitle"),
+      desc: t("home.current.featureRefineDesc"),
+    },
+    {
+      id: "publish",
+      icon: Rocket,
+      title: t("home.current.featurePublishTitle"),
+      desc: t("home.current.featurePublishDesc"),
+    },
+  ];
 
   return (
     <section className="relative pt-20 pb-20 overflow-hidden min-h-[700px]">
@@ -36,7 +58,7 @@ export function HeroSection({ onStartDemo: _onStartDemo }: HeroSectionProps) {
               className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-sm text-primary mb-6"
             >
               <ShieldCheck className="h-3.5 w-3.5" />
-              AI-native book creation platform
+              {t("home.current.badge")}
             </motion.div>
 
             <motion.h1
@@ -45,8 +67,8 @@ export function HeroSection({ onStartDemo: _onStartDemo }: HeroSectionProps) {
               transition={{ duration: 0.5 }}
               className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-5 leading-[1.1]"
             >
-              From idea to{" "}
-              <span className="text-primary">structured book.</span>
+              {t("home.current.titleLead")}{" "}
+              <span className="text-primary">{t("home.current.titleHighlight")}</span>
             </motion.h1>
 
             <motion.p
@@ -55,8 +77,7 @@ export function HeroSection({ onStartDemo: _onStartDemo }: HeroSectionProps) {
               transition={{ duration: 0.5, delay: 0.1 }}
               className="text-base md:text-lg text-muted-foreground mb-8 leading-relaxed"
             >
-              Create structured AI-native books, read them, and verify learning in one intelligent workspace.
-              Advanced authoring and publishing workflows stay hidden until their GA validation gates pass.
+              {t("home.current.subtitle")}
             </motion.p>
 
             <motion.div
@@ -66,11 +87,11 @@ export function HeroSection({ onStartDemo: _onStartDemo }: HeroSectionProps) {
               className="flex flex-col sm:flex-row items-start gap-3 mb-10"
             >
               <Button onClick={() => navigate("/generate")} size="lg" className="gap-2 min-w-[190px]">
-                Create a Book
+                {t("home.current.ctaCreate")}
                 <ArrowRight className="h-4 w-4" />
               </Button>
               <Button onClick={() => navigate("/explore")} variant="outline" size="lg" className="gap-2">
-                Explore Books
+                {t("home.current.ctaExplore")}
                 <BookOpen className="h-4 w-4" />
               </Button>
             </motion.div>
@@ -81,9 +102,9 @@ export function HeroSection({ onStartDemo: _onStartDemo }: HeroSectionProps) {
               transition={{ duration: 0.6, delay: 0.3 }}
               className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground"
             >
-              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Structured book generation</span>
-              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Reading and mastery tools</span>
-              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Fail-closed GA feature gates</span>
+              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> {t("home.current.signalStructured")}</span>
+              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> {t("home.current.signalMastery")}</span>
+              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> {t("home.current.signalGates")}</span>
             </motion.div>
           </div>
 
@@ -93,19 +114,19 @@ export function HeroSection({ onStartDemo: _onStartDemo }: HeroSectionProps) {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="hidden lg:grid grid-cols-2 gap-3"
           >
-            {FEATURES.map((f, i) => (
+            {features.map((feature, index) => (
               <motion.div
-                key={f.title}
+                key={feature.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.3 + i * 0.1 }}
+                transition={{ duration: 0.4, delay: 0.3 + index * 0.1 }}
                 className="bg-card/90 backdrop-blur-md border border-border rounded-xl p-5 hover:border-primary/40 hover:shadow-lg transition-all duration-300"
               >
                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
-                  <f.icon className="h-5 w-5 text-primary" />
+                  <feature.icon className="h-5 w-5 text-primary" />
                 </div>
-                <h3 className="font-semibold text-foreground text-sm mb-1">{f.title}</h3>
-                <p className="text-xs text-muted-foreground">{f.desc}</p>
+                <h3 className="font-semibold text-foreground text-sm mb-1">{feature.title}</h3>
+                <p className="text-xs text-muted-foreground">{feature.desc}</p>
               </motion.div>
             ))}
           </motion.div>
@@ -117,13 +138,13 @@ export function HeroSection({ onStartDemo: _onStartDemo }: HeroSectionProps) {
           transition={{ duration: 0.6, delay: 0.25 }}
           className="grid grid-cols-2 gap-3 mt-10 lg:hidden"
         >
-          {FEATURES.map((f) => (
-            <div key={f.title} className="bg-card/90 backdrop-blur-sm border border-border rounded-xl p-4 text-center">
+          {features.map((feature) => (
+            <div key={feature.id} className="bg-card/90 backdrop-blur-sm border border-border rounded-xl p-4 text-center">
               <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                <f.icon className="h-4 w-4 text-primary" />
+                <feature.icon className="h-4 w-4 text-primary" />
               </div>
-              <h3 className="font-semibold text-foreground text-xs mb-0.5">{f.title}</h3>
-              <p className="text-[10px] text-muted-foreground">{f.desc}</p>
+              <h3 className="font-semibold text-foreground text-xs mb-0.5">{feature.title}</h3>
+              <p className="text-[10px] text-muted-foreground">{feature.desc}</p>
             </div>
           ))}
         </motion.div>
