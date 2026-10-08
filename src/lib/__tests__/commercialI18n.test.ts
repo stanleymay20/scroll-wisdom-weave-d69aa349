@@ -82,12 +82,19 @@ describe("commercial i18n contract", () => {
   it("exposes language switching and localized conversion copy on mobile", () => {
     const header = source("src/components/mobile/MobileHeader.tsx");
     const home = source("src/components/mobile/MobileHome.tsx");
+    const continueReading = source("src/components/home/ContinueReadingWidget.tsx");
 
     expect(header).toContain("<LanguageSwitcher />");
     expect(header).toContain('t("mobile.header.search")');
     expect(home).toContain('t("mobile.home.title")');
     expect(home).toContain('t("mobile.home.create")');
     expect(home).not.toContain("Create. Read. Master.");
+
+    expect(continueReading).toContain("useLanguage");
+    expect(continueReading).toContain('t("library.continueReading")');
+    expect(continueReading).toContain('t("reader.chapter")');
+    expect(continueReading).toContain('t("book.complete")');
+    expect(continueReading).not.toContain(">Continue Reading<");
   });
 
   it("preserves the selected book language from UI through outline and chapter generation", () => {
