@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { commercialTranslations } from "@/lib/commercialI18n";
+import commercialEnglish from "@/lib/locales/commercial.en";
+import commercialFrench from "@/lib/locales/commercial.fr";
+import commercialGerman from "@/lib/locales/commercial.de";
+import commercialSpanish from "@/lib/locales/commercial.es";
+import commercialArabic from "@/lib/locales/commercial.ar";
+import commercialSwahili from "@/lib/locales/commercial.sw";
+import { loadCommercialTranslations } from "@/lib/commercialI18n";
+
+const catalogs = {
+  en: commercialEnglish,
+  fr: commercialFrench,
+  de: commercialGerman,
+  es: commercialSpanish,
+  ar: commercialArabic,
+  sw: commercialSwahili,
+} as const;
 
 const LANGUAGES = ["en", "fr", "de", "es", "ar", "sw"] as const;
 
@@ -10,13 +25,13 @@ function source(path: string): string {
 
 describe("commercial i18n contract", () => {
   it("keeps every commercial locale in exact key parity with English", () => {
-    const englishKeys = Object.keys(commercialTranslations.en).sort();
+    const englishKeys = Object.keys(catalogs.en).sort();
 
     for (const language of LANGUAGES) {
-      const catalog = commercialTranslations[language];
+      const catalog = catalogs[language] as Record<string, string>;
       expect(Object.keys(catalog).sort(), `${language} key parity`).toEqual(englishKeys);
       for (const key of englishKeys) {
-        expect(String(catalog[key as keyof typeof catalog]).trim(), `${language}:${key}`).not.toBe("");
+        expect(String(catalog[key]).trim(), `${language}:${key}`).not.toBe("");
       }
     }
   });
@@ -33,9 +48,20 @@ describe("commercial i18n contract", () => {
 
     for (const language of LANGUAGES.filter((code) => code !== "en")) {
       for (const key of primaryKeys) {
-        expect(commercialTranslations[language][key]).not.toBe(commercialTranslations.en[key]);
+        expect(catalogs[language][key]).not.toBe(catalogs.en[key]);
       }
     }
+  });
+
+  it("lazy-loads non-English commercial locales instead of inflating the entry bundle", async () => {
+    for (const language of LANGUAGES.filter((code) => code !== "en")) {
+      const catalog = await loadCommercialTranslations(language);
+      expect(catalog["home.current.ctaCreate"]).toBe(catalogs[language]["home.current.ctaCreate"]);
+    }
+
+    const loaderSource = source("src/lib/commercialI18n.ts");
+    expect(loaderSource).toContain('import("@/lib/locales/commercial.fr")');
+    expect(loaderSource).not.toContain("commercialTranslations = {");
   });
 
   it("does not bypass i18n on the desktop conversion shell", () => {
