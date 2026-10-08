@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Language, getStoredLanguage, setStoredLanguage, t as translate, LANGUAGES } from '@/lib/i18n';
+import { translateCommercial } from '@/lib/commercialI18n';
 
 interface LanguageContextType {
   language: Language;
@@ -32,8 +33,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     setLanguageState(lang);
   };
 
-  const t = (key: string) => translate(key, language);
-  
+  // Commercially exposed copy is maintained in a strict, parity-tested catalog.
+  // Legacy keys continue to resolve through the existing dictionary while the
+  // rest of the product is migrated without breaking older surfaces.
+  const t = (key: string) => translateCommercial(key, language) ?? translate(key, language);
+
   const dir = LANGUAGES.find(l => l.code === language)?.dir || 'ltr';
 
   return (
