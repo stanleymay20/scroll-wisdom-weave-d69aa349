@@ -144,3 +144,36 @@ export function marketplacePayoutsEnabled(value?: string | null): boolean {
 
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
+
+
+/**
+ * Physical manufacturing is an independent operational promise. General
+ * payment/commercial GA must never cause a book to be submitted to a printer.
+ */
+export function printFulfillmentEnabled(value?: string | null): boolean {
+  const normalized = String(
+    value === undefined ? Deno.env.get("GA_PRINT_FULFILLMENT_ENABLED") ?? "" : value ?? "",
+  ).trim().toLowerCase();
+
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+
+/** Public reader checkout for physical books remains closed after author-copy fulfillment opens. */
+export function printReaderCheckoutEnabled(value?: string | null): boolean {
+  const normalized = String(
+    value === undefined ? Deno.env.get("GA_PRINT_READER_CHECKOUT_ENABLED") ?? "" : value ?? "",
+  ).trim().toLowerCase();
+
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+
+/** Wholesale/bookstore/library distribution is separate from direct POD fulfillment. */
+export function printDistributionEnabled(value?: string | null): boolean {
+  const normalized = String(
+    value === undefined ? Deno.env.get("GA_PRINT_DISTRIBUTION_ENABLED") ?? "" : value ?? "",
+  ).trim().toLowerCase();
+
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
