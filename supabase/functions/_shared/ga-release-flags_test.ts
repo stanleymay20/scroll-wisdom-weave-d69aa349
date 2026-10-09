@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { advancedAuthoringEnabled, advancedBookTypeEnabled, externalPaymentWritesEnabled, marketplacePaymentsEnabled, marketplacePayoutsEnabled, publicationMintEnabled, publishingServiceBillingEnabled, qualificationBookTypeEnabled, qualifiedAdvancedBookTypes, specializedAuthoringEnabled, teamsSubscriptionCheckoutEnabled } from "./ga-release-flags.ts";
+import { advancedAuthoringEnabled, advancedBookTypeEnabled, externalPaymentWritesEnabled, marketplacePaymentsEnabled, marketplacePayoutsEnabled, printDistributionEnabled, printFulfillmentEnabled, printReaderCheckoutEnabled, publicationMintEnabled, publishingServiceBillingEnabled, qualificationBookTypeEnabled, qualifiedAdvancedBookTypes, specializedAuthoringEnabled, teamsSubscriptionCheckoutEnabled } from "./ga-release-flags.ts";
 
 Deno.test("GA payment writes default closed for empty or invalid values", () => {
   for (const value of ["", "false", "0", "no", "enabled", "TRUE-ish"]) {
@@ -124,5 +124,34 @@ Deno.test("GA marketplace payouts default closed independently of marketplace sa
 Deno.test("GA marketplace payouts open only for explicit affirmative values", () => {
   for (const value of ["true", "TRUE", "1", "yes", " Yes "]) {
     assertEquals(marketplacePayoutsEnabled(value), true);
+  }
+});
+
+Deno.test("print fulfillment defaults closed independently of payment GA", () => {
+  for (const value of ["", "false", "0", "no", "enabled", "TRUE-ish"]) {
+    assertEquals(printFulfillmentEnabled(value), false);
+  }
+  assertEquals(externalPaymentWritesEnabled("true"), true);
+  assertEquals(printFulfillmentEnabled("false"), false);
+});
+
+Deno.test("print reader checkout is separately fail-closed from author fulfillment", () => {
+  assertEquals(printFulfillmentEnabled("true"), true);
+  for (const value of ["", "false", "0", "no", "enabled"]) {
+    assertEquals(printReaderCheckoutEnabled(value), false);
+  }
+  for (const value of ["true", "TRUE", "1", "yes", " Yes "]) {
+    assertEquals(printReaderCheckoutEnabled(value), true);
+  }
+});
+
+Deno.test("print distribution is separately fail-closed from direct fulfillment", () => {
+  assertEquals(printFulfillmentEnabled("true"), true);
+  assertEquals(printReaderCheckoutEnabled("true"), true);
+  for (const value of ["", "false", "0", "no", "enabled"]) {
+    assertEquals(printDistributionEnabled(value), false);
+  }
+  for (const value of ["true", "TRUE", "1", "yes", " Yes "]) {
+    assertEquals(printDistributionEnabled(value), true);
   }
 });
