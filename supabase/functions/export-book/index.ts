@@ -3895,8 +3895,8 @@ function escapeXml(text: string): string {
 // ===== KDP-COMPLIANT PDF Generation =====
 // Amazon KDP requires specific trim sizes, margins, and formatting
 export async function generateKDPPDF(
-  book: any,
-  chapters: any[],
+  book: Parameters<typeof renderKDPPDF>[0],
+  chapters: Parameters<typeof renderKDPPDF>[1],
   author: string,
   identifier: string,
   isISBN: boolean,
@@ -3912,7 +3912,7 @@ export async function generateKDPPDF(
   const args = [book, chapters, author, identifier, isISBN, year, coverImageBytes,
     isAcademic, citationStyle, bibliography, trimSize, useBleed, ctx] as const;
   let pdfDoc = await renderKDPPDF(...args, 0);
-  const totalWords = chapters.reduce((sum: number, ch: any) => sum + (ch.content?.split(/\s+/).length || 0), 0);
+  const totalWords = chapters.reduce((sum: number, ch) => sum + (ch.content?.split(/\s+/).length || 0), 0);
   const estimatedPages = Math.max(24, Math.ceil(totalWords / 250) + 10);
   // KDP uses the final page count, rounded to even, rather than word estimates.
   const actualPages = Math.ceil(pdfDoc.getPageCount() / 2) * 2;
