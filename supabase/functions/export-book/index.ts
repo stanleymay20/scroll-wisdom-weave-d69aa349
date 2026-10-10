@@ -13,6 +13,7 @@ import { recordExportEvent } from "../_shared/export/audit.ts";
 import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";
 import { resolvePrepublicationIdentity } from "../_shared/publishingIdentity.ts";
 import { embedUnicodePdfInteriorFonts, installUnicodePdfTextGuard } from "../_shared/pdf-unicode-fonts.ts";
+import { PdfTableLayoutError, assertPdfTableContentFits, assertPdfTableGeometryFits } from "../_shared/pdf-table-layout.ts";
 import { assertPdfGlyphCoverage, normalizePdfText, UnsupportedPdfGlyphError, type PdfFontLike as PdfGlyphCoverageFont } from "../_shared/pdf-unicode.ts";
 
 // Disable zip.js web workers — Deno edge runtime + test runner leak worker
@@ -816,6 +817,7 @@ function drawPdfTable(
     addPageNumber,
     pageNumberRef,
   } = input;
+  assertPdfTableContentFits(headers, rows, { columns: 6, headerChars: 140, cellChars: 500 }, "PDF table");
   const safeHeaders = headers.filter((h) => h !== undefined && h !== null).slice(0, 6);
   if (safeHeaders.length === 0) return { page, y };
 
@@ -829,10 +831,12 @@ function drawPdfTable(
 
   const headerCells = safeHeaders.map((header) => {
     const wrapped = wrapText(stripInlineMarkdown((header || "").slice(0, 140)), fonts.bold, headerFontSize, Math.max(24, colWidth - 10));
-    return (wrapped.length ? wrapped : [""]).slice(0, 5);
+    if (wrapped.length > 5) throw new PdfTableLayoutError("PDF table header", "exceeds 5 wrapped lines");
+    return wrapped.length ? wrapped : [""];
   });
   const headerHeight = Math.max(1, ...headerCells.map((cell) => cell.length)) * headerLineHeight + 10;
   const wrappedRows = getWrappedTableRows(rows, cols, fonts.regular, cellFontSize, colWidth, 500);
+  assertPdfTableGeometryFits(headerHeight, wrappedRows.heights, pageHeight - margin - 30 - bottom, "PDF table");
 
   const drawHeader = () => {
     page.drawRectangle({
@@ -1757,7 +1761,7 @@ serve(async (req) => {
             canonicalFallbackUsed = false;
             console.log("[EXPORT] canonical PDF render succeeded");
           } catch (e) {
-            if (e instanceof UnsupportedPdfGlyphError) throw e;
+            if (e instanceof UnsupportedPdfGlyphError || e instanceof PdfTableLayoutError) throw e;
             canonicalFallbackUsed = true;
             console.warn("[EXPORT] canonical PDF render failed, falling back to legacy:", e);
             pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
@@ -1929,7 +1933,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify(error instanceof UnsupportedPdfGlyphError
         ? { error: error.message, code: error.code, glyphs: error.glyphs, context: error.context }
-        : { error: error instanceof Error ? error.message : "Unknown error" }),
+        : error instanceof PdfTableLayoutError
+          ? { error: error.message, code: error.code, context: error.context }
+          : { error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -2444,12 +2450,12 @@ export async function generateCanonicalPDF(
       } catch (blockErr) {
         // Unicode fidelity is a publication-integrity boundary, not a
         // recoverable block-level rendering error. Never log-and-continue after
-        // the shared glyph guard has rejected content.
+        // a glyph or table layout guard has rejected content.
         if (
           blockErr &&
           typeof blockErr === "object" &&
           "code" in blockErr &&
-          (blockErr as { code?: unknown }).code === "PDF_UNSUPPORTED_GLYPH"
+          ["PDF_UNSUPPORTED_GLYPH", "PDF_TABLE_LAYOUT_UNSUPPORTED"].includes(String((blockErr as { code?: unknown }).code))
         ) {
           throw blockErr;
         }
@@ -3255,6 +3261,7 @@ export async function generatePDF(
         if (table) {
           y -= 10;
           
+          assertPdfTableContentFits(table.headers, table.rows, { columns: 6, headerChars: 120, cellChars: 400 }, "Legacy PDF table");
           const numCols = Math.min(table.headers.length, 6);
           const colWidth = textWidth / numCols;
           const cellFontSize = 8;
@@ -3265,7 +3272,8 @@ export async function generatePDF(
           const headerCellLines: string[][] = [];
           let headerMaxLines = 1;
           for (let i = 0; i < numCols; i++) {
-            const wrapped = wrapText(stripInlineMarkdown((table.headers[i] || '').slice(0, 120)), timesRomanBold, 9, colWidth - 10).slice(0, 3);
+            const wrapped = wrapText(stripInlineMarkdown(table.headers[i] || ''), timesRomanBold, 9, colWidth - 10);
+            if (wrapped.length > 3) throw new PdfTableLayoutError("Legacy PDF table header", "exceeds 3 wrapped lines");
             headerCellLines.push(wrapped);
             headerMaxLines = Math.max(headerMaxLines, wrapped.length);
           }
@@ -3283,6 +3291,7 @@ export async function generatePDF(
             rowHeights.push(maxLines * cellLineHeight + cellPadding);
           }
           
+          assertPdfTableGeometryFits(headerHeight, rowHeights, pageHeight - 2 * margin - 60, "Legacy PDF table");
           const totalTableHeight = headerHeight + rowHeights.reduce((s, h) => s + h, 0) + 30;
           
           if (y - Math.min(totalTableHeight, 200) < margin + 30) {
@@ -3364,6 +3373,7 @@ export async function generatePDF(
           // Render markdown table with dynamic row heights
           y -= 10;
           
+          assertPdfTableContentFits(table.headers, table.rows, { columns: 6, headerChars: 120, cellChars: 400 }, "Legacy PDF table");
           const numCols = Math.min(table.headers.length, 6);
           const colWidth = textWidth / numCols;
           const cellFontSize = 8;
@@ -3374,7 +3384,8 @@ export async function generatePDF(
           const headerCellLines: string[][] = [];
           let headerMaxLines = 1;
           for (let i = 0; i < numCols; i++) {
-            const wrapped = wrapText(stripInlineMarkdown((table.headers[i] || '').slice(0, 120)), timesRomanBold, 9, colWidth - 10).slice(0, 3);
+            const wrapped = wrapText(stripInlineMarkdown(table.headers[i] || ''), timesRomanBold, 9, colWidth - 10);
+            if (wrapped.length > 3) throw new PdfTableLayoutError("Legacy PDF table header", "exceeds 3 wrapped lines");
             headerCellLines.push(wrapped);
             headerMaxLines = Math.max(headerMaxLines, wrapped.length);
           }
@@ -3392,6 +3403,7 @@ export async function generatePDF(
             rowHeights.push(maxLines * cellLineHeight + cellPadding);
           }
           
+          assertPdfTableGeometryFits(headerHeight, rowHeights, pageHeight - 2 * margin - 60, "Legacy PDF table");
           const totalTableHeight = headerHeight + rowHeights.reduce((s, h) => s + h, 0) + 30;
           
           // Start table on new page if it won't fit
@@ -4230,6 +4242,7 @@ export async function generateKDPPDF(
         const table = processed.tables[parseInt(mdTableMatch[1])];
         if (table) {
           y -= 8;
+          assertPdfTableContentFits(table.headers, table.rows, { columns: 5, headerChars: 120, cellChars: 300 }, "KDP table");
           const numCols = Math.min(table.headers.length, 5);
           const colWidth = textWidth / numCols;
           const cellFontSize = 7.5;
@@ -4240,7 +4253,8 @@ export async function generateKDPPDF(
           const kdpHeaderLines: string[][] = [];
           let kdpHeaderMax = 1;
           for (let i = 0; i < numCols; i++) {
-            const wr = wrapText(stripInlineMarkdown((table.headers[i] || '').slice(0, 120)), timesRomanBold, cellFontSize, colWidth - 8).slice(0, 3);
+            const wr = wrapText(stripInlineMarkdown(table.headers[i] || ''), timesRomanBold, cellFontSize, colWidth - 8);
+            if (wr.length > 3) throw new PdfTableLayoutError("KDP table header", "exceeds 3 wrapped lines");
             kdpHeaderLines.push(wr);
             kdpHeaderMax = Math.max(kdpHeaderMax, wr.length);
           }
@@ -4258,6 +4272,7 @@ export async function generateKDPPDF(
             kdpRowHeights.push(maxLines * cellLineH + cellPad);
           }
           
+          assertPdfTableGeometryFits(headerHeight, kdpRowHeights, textTop - 15 - (textBottom + 12), "KDP table");
           const totalH = headerHeight + kdpRowHeights.reduce((s, h) => s + h, 0) + 20;
           if (y - Math.min(totalH, 150) < textBottom + 20) {
             addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
@@ -4316,6 +4331,7 @@ export async function generateKDPPDF(
         const table = processed.customTables[parseInt(customTableMatch[1])];
         if (table) {
           y -= 8;
+          assertPdfTableContentFits(table.headers, table.rows, { columns: 5, headerChars: 120, cellChars: 300 }, "KDP table");
           const numCols = Math.min(table.headers.length, 5);
           const colWidth = textWidth / numCols;
           const cellFontSize = 7.5;
@@ -4326,7 +4342,8 @@ export async function generateKDPPDF(
           const kdpCHeaderLines: string[][] = [];
           let kdpCHeaderMax = 1;
           for (let i = 0; i < numCols; i++) {
-            const wr = wrapText(stripInlineMarkdown((table.headers[i] || '').slice(0, 120)), timesRomanBold, cellFontSize, colWidth - 8).slice(0, 3);
+            const wr = wrapText(stripInlineMarkdown(table.headers[i] || ''), timesRomanBold, cellFontSize, colWidth - 8);
+            if (wr.length > 3) throw new PdfTableLayoutError("KDP table header", "exceeds 3 wrapped lines");
             kdpCHeaderLines.push(wr);
             kdpCHeaderMax = Math.max(kdpCHeaderMax, wr.length);
           }
@@ -4343,6 +4360,7 @@ export async function generateKDPPDF(
             kdpCRowHeights.push(maxLines * cellLineH + cellPad);
           }
           
+          assertPdfTableGeometryFits(headerHeight, kdpCRowHeights, textTop - 15 - (textBottom + 12), "KDP table");
           const totalH = headerHeight + kdpCRowHeights.reduce((s, h) => s + h, 0) + 20;
           if (y - Math.min(totalH, 150) < textBottom + 20) {
             addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
