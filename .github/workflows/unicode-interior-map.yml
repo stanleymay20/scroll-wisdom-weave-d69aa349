@@ -1,0 +1,33 @@
+name: Unicode Interior Map
+
+on:
+  push:
+    branches:
+      - fix/unicode-safe-pdf-interior
+    paths:
+      - .github/workflows/unicode-interior-map.yml
+
+permissions:
+  contents: read
+
+jobs:
+  map:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Print exact renderer boundaries
+        run: |
+          set -euo pipefail
+          f=supabase/functions/export-book/index.ts
+          echo '=== definitions ==='
+          grep -nE 'function measureCached|export async function generateCanonicalPDF|async function generatePDF\(|async function generateKDPPDF\(|embedFont\(StandardFonts|const _pdfCharMap|function sanitizeForPDF' "$f" || true
+          echo '=== measureCached ==='
+          line=$(grep -n 'function measureCached' "$f" | head -1 | cut -d: -f1); sed -n "$((line-4)),$((line+28))p" "$f"
+          echo '=== canonical font init ==='
+          line=$(grep -n 'export async function generateCanonicalPDF' "$f" | head -1 | cut -d: -f1); sed -n "$line,$((line+95))p" "$f"
+          echo '=== legacy font init ==='
+          line=$(grep -n 'async function generatePDF(' "$f" | head -1 | cut -d: -f1); sed -n "$line,$((line+75))p" "$f"
+          echo '=== KDP font init ==='
+          line=$(grep -n 'async function generateKDPPDF(' "$f" | head -1 | cut -d: -f1); sed -n "$line,$((line+95))p" "$f"
+          echo '=== sanitizer call count ==='
+          grep -o 'sanitizeForPDF(' "$f" | wc -l
