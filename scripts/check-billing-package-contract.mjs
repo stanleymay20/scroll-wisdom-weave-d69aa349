@@ -58,6 +58,7 @@ requireText(pricing, "One plan ladder. Clear usage. Publishing only when you pub
 requireText(pricing, "ScrollLibrary Press publishing services", "publishing services section");
 requireText(pricing, "Usage add-ons", "usage add-on section");
 requireText(pricing, "Marketplace fees", "transparent marketplace fees");
+requireText(pricing, "No ScrollLibrary commission on external-channel royalties", "external distribution commission boundary");
 rejectText(pricing, "CREATOR_SUBSCRIPTION_TIERS", "legacy publisher tiers exposed on pricing");
 rejectText(pricing, "Commercial publishing rights", "commercial rights sold as a plan privilege");
 
@@ -106,8 +107,8 @@ for (const [needle, label] of [
   ["aiTextWordsPerMonth: 2_500_000", "Teams text pool"],
   ["visualCreditsPerMonth: 200", "Teams visual pool"],
   ["audioCreditsPerMonth: 180", "Teams audio pool"],
-  ["marketplaceFeeBps: 1_500", "Free marketplace fee"],
-  ["marketplaceFeeBps: 1_000", "Creator marketplace fee"],
+  ["marketplaceFeeBps: 1_000", "Free marketplace fee"],
+  ["marketplaceFeeBps: 700", "Creator marketplace fee"],
   ["marketplaceFeeBps: 500", "Pro marketplace fee"],
   ["marketplaceFeeBps: 300", "Teams marketplace fee"],
 ]) requireText(serverPlans, needle, label);
@@ -134,7 +135,6 @@ requireText(checkout, 'status: "open"', "open Checkout Session reuse");
 requireText(checkout, 'code: "checkout_in_progress"', "single open plan checkout invariant");
 requireText(checkout, "planTierForProduct(catalogue, productId)", "same-domain subscription detection");
 
-// Commercial Checkout must collect the inputs required for Stripe Tax / B2B tax IDs.
 for (const [source, label] of [
   [checkout, "subscription checkout"],
   [orderCheckout, "one-time checkout"],
@@ -148,8 +148,6 @@ for (const [source, label] of [
 requireText(webhook, "session.amount_subtotal", "tax-aware fulfillment compares pre-tax subtotal");
 requireText(webhook, "preTaxRefundAmount", "tax-inclusive refunds are mapped back to pre-tax ledger amounts");
 
-// Every new paid economic-v1 checkout must capture explicit Terms consent and
-// fulfillment must fail closed if the versioned consent evidence is absent.
 for (const [source, label] of [
   [checkout, "subscription checkout"],
   [orderCheckout, "one-time checkout"],
@@ -162,7 +160,6 @@ for (const [source, label] of [
 requireText(webhook, 'session.metadata?.commercialConsentVersion !== "eu-digital-v1"', "historical sessions are not retroactively reclassified");
 requireText(webhook, 'session.consent?.terms_of_service !== "accepted"', "versioned checkout fulfillment verifies Stripe consent");
 
-// Compute must be metered on server-owned, race-safe reservations.
 requireText(migration, "CREATE TABLE IF NOT EXISTS public.billing_usage_monthly", "monthly usage authority");
 requireText(migration, "pg_advisory_xact_lock", "atomic usage locking");
 requireText(migration, "reserve_billing_usage", "generic usage reservation");
@@ -175,9 +172,6 @@ requireText(generation, '"visual_credits"', "chapter figures use visual meter");
 requireText(images, '"visual_credits"', "image generation uses visual meter");
 requireText(tts, '"audio_units"', "TTS uses pooled audio meter");
 
-// Paid plan access continues to follow the shared Stripe/local-subscription
-// authority. Cached profile.plan must never independently authorize paid voice
-// compute after a delayed or failed profile sync.
 requireText(stripeFields, "subscriptionStatusGrantsAccess", "shared access-status helper");
 requireText(stripeFields, 'status === "active" || status === "trialing"', "access-bearing Stripe states");
 requireText(stripeFields, "subscriptionStatusBlocksNewCheckout", "shared replacement-checkout helper");
