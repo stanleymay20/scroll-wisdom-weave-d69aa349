@@ -50,7 +50,12 @@ function decodeBase64(base64: string): Uint8Array {
 
 async function gunzipBase64(base64: string): Promise<Uint8Array> {
   const compressed = decodeBase64(base64);
-  const decompressed = new Blob([compressed])
+  // BlobPart requires an ArrayBuffer-backed view. Copy into an explicit
+  // ArrayBuffer instead of casting ArrayBufferLike so Deno/DOM type checking
+  // remains strict and SharedArrayBuffer cannot leak across this boundary.
+  const compressedBuffer = new ArrayBuffer(compressed.byteLength);
+  new Uint8Array(compressedBuffer).set(compressed);
+  const decompressed = new Blob([compressedBuffer])
     .stream()
     .pipeThrough(new DecompressionStream("gzip"));
   return new Uint8Array(await new Response(decompressed).arrayBuffer());
