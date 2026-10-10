@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { PDFDocument, rgb, StandardFonts, PDFRawStream, pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, rgb, PDFRawStream, pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } from "https://esm.sh/pdf-lib@1.17.1";
 import * as zip from "https://deno.land/x/zipjs@v2.7.32/index.js";
 import { parseBookToCanonical } from "../_shared/canonicalContent.ts";
 import type { CanonicalDiagram } from "../_shared/canonicalContent.ts";
@@ -12,6 +12,8 @@ import { computeSha256Hex } from "../_shared/export/hash.ts";
 import { recordExportEvent } from "../_shared/export/audit.ts";
 import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";
 import { resolvePrepublicationIdentity } from "../_shared/publishingIdentity.ts";
+import { embedUnicodePdfInteriorFonts, installUnicodePdfTextGuard } from "../_shared/pdf-unicode-fonts.ts";
+import { assertPdfGlyphCoverage, normalizePdfText } from "../_shared/pdf-unicode.ts";
 
 // Disable zip.js web workers — Deno edge runtime + test runner leak worker
 // timers otherwise (no Worker pool to clean up).
@@ -1043,8 +1045,8 @@ function drawStyledParagraph(
     }
     const spaceWidth = measureCached(font, fontSize, " ");
 
-    // WinAnsi guard: pdf-lib standard fonts throw on any non-Latin-1 glyph
-    // (e.g. "ᵢ" U+1D62 from LaTeX subscripts). Sanitize before measure + draw.
+    // Normalize printable Unicode before measure + draw; embedded fonts and
+    // the shared guard fail loudly if a glyph is unsupported.
     const words = sanitizeForPDF(run.text).split(/\s+/);
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
@@ -1100,51 +1102,12 @@ function markdownToDocxRuns(text: string): string {
 }
 
 /**
- * Sanitize text for PDF WinAnsi encoding — SINGLE-PASS character map
- * Replaces Unicode characters that cannot be encoded in WinAnsi
- * CRITICAL: Must be called on ALL text before drawText() in PDF generation
+ * Normalize printable manuscript Unicode for embedded-font PDF rendering.
+ * No transliteration or silent glyph deletion is permitted here. Unsupported
+ * glyphs are rejected by the shared coverage guard with precise code points.
  */
-const _pdfCharMap: Record<string, string> = {
-  '\u2192': '->', '\u2190': '<-', '\u2194': '<->', '\u21D2': '=>', '\u21D0': '<=', '\u21D4': '<=>', '\u2191': '^', '\u2193': 'v',
-  '\u2018': "'", '\u2019': "'", '\u201A': "'", '\u02BC': "'", '\u02B9': "'", '\u02BB': "'", '\u0060': "'", '\u00B4': "'",
-  '\u201C': '"', '\u201D': '"', '\u201E': '"', '\u201F': '"', '\u2033': '"',
-  '\u2032': "'", '\u2035': "'", '\u02CA': "'", '\u02CB': "'",
-  '\u2070': '0', '\u00B9': '1', '\u00B2': '2', '\u00B3': '3', '\u2074': '4', '\u2075': '5', '\u2076': '6', '\u2077': '7', '\u2078': '8', '\u2079': '9',
-  '\u207A': '+', '\u207B': '-', '\u207C': '=', '\u207D': '(', '\u207E': ')', '\u207F': 'n',
-  '\u2080': '0', '\u2081': '1', '\u2082': '2', '\u2083': '3', '\u2084': '4', '\u2085': '5', '\u2086': '6', '\u2087': '7', '\u2088': '8', '\u2089': '9',
-  '\u208A': '+', '\u208B': '-', '\u208C': '=', '\u208D': '(', '\u208E': ')',
-  '\u00D7': 'x', '\u00F7': '/', '\u2212': '-', '\u2013': '-', '\u2014': '-', '\u2026': '...', '\u2022': '-',
-  '\u25E6': 'o', '\u25AA': '-', '\u25B8': '>', '\u25B9': '>', '\u25C2': '<', '\u25C3': '<',
-  '\u2248': '~', '\u2260': '!=', '\u2264': '<=', '\u2265': '>=',
-  '\u221E': 'infinity', '\u03C0': 'pi', '\u03B1': 'alpha', '\u03B2': 'beta', '\u03B3': 'gamma', '\u03B4': 'delta',
-  '\u03B5': 'epsilon', '\u03B8': 'theta', '\u03BB': 'lambda', '\u03BC': 'mu', '\u03C3': 'sigma', '\u03C6': 'phi',
-  '\u03C9': 'omega', '\u03A9': 'Omega', '\u2211': 'sum', '\u220F': 'product', '\u221A': 'sqrt',
-  '\u222B': 'integral', '\u2202': 'd', '\u2206': 'delta', '\u2207': 'nabla',
-  '\u2122': '(TM)', '\u2120': '(SM)', '\u2117': '(P)',
-  // Subscript/superscript letters (LaTeX x_i, a_n, etc.) — WinAnsi cannot encode these
-  '\u1D62': 'i', '\u2C7C': 'j', '\u2096': 'k', '\u2099': 'n', '\u2098': 'm', '\u2090': 'a',
-  '\u2091': 'e', '\u2092': 'o', '\u2093': 'x', '\u2095': 'h', '\u209C': 't', '\u209A': 'p',
-  '\u209B': 's', '\u1D63': 'r', '\u1D64': 'u', '\u1D65': 'v', '\u2097': 'l',
-  '\u1D2C': 'A', '\u1D43': 'a', '\u1D47': 'b', '\u1D9C': 'c', '\u1D48': 'd', '\u1D49': 'e',
-  '\u1D57': 't', '\u02B0': 'h', '\u02B2': 'j', '\u02E1': 'l', '\u02B3': 'r',
-  '\u02E2': 's', '\u02B7': 'w', '\u02E3': 'x', '\u02B8': 'y',
-};
-
 function sanitizeForPDF(text: string): string {
-  if (!text) return "";
-  let result = '';
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    const code = ch.charCodeAt(0);
-    const mapped = _pdfCharMap[ch];
-    if (mapped !== undefined) {
-      result += mapped;
-    } else if (code <= 0xFF) {
-      result += ch; // Latin-1 range — safe for WinAnsi
-    }
-    // else: non-Latin-1 char not in map — drop silently
-  }
-  return result;
+  return normalizePdfText(text);
 }
 
 /**
@@ -1997,12 +1960,14 @@ export async function generateCanonicalPDF(
   );
 
   const pdfDoc = await PDFDocument.create();
-  const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-  const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
-  const timesRomanItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
-  const timesRomanBoldItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
-  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const courier = await pdfDoc.embedFont(StandardFonts.Courier);
+  installUnicodePdfTextGuard(pdfDoc);
+  const unicodeFonts = await embedUnicodePdfInteriorFonts(pdfDoc);
+  const timesRoman = unicodeFonts.regular;
+  const timesRomanBold = unicodeFonts.bold;
+  const timesRomanItalic = unicodeFonts.italic;
+  const timesRomanBoldItalic = unicodeFonts.boldItalic;
+  const helvetica = unicodeFonts.sans;
+  const courier = unicodeFonts.mono;
   const bodyFonts = { regular: timesRoman, bold: timesRomanBold, italic: timesRomanItalic, boldItalic: timesRomanBoldItalic };
 
   const pageWidth = 612;
@@ -2539,12 +2504,14 @@ async function generatePDF(
   ctx: ExportContext,
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
-  const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-  const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
-  const timesRomanItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
-  const timesRomanBoldItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
-  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const courier = await pdfDoc.embedFont(StandardFonts.Courier); // Monospace for code
+  installUnicodePdfTextGuard(pdfDoc);
+  const unicodeFonts = await embedUnicodePdfInteriorFonts(pdfDoc);
+  const timesRoman = unicodeFonts.regular;
+  const timesRomanBold = unicodeFonts.bold;
+  const timesRomanItalic = unicodeFonts.italic;
+  const timesRomanBoldItalic = unicodeFonts.boldItalic;
+  const helvetica = unicodeFonts.sans;
+  const courier = unicodeFonts.mono;
   
   const bodyFonts = { regular: timesRoman, bold: timesRomanBold, italic: timesRomanItalic, boldItalic: timesRomanBoldItalic };
   
@@ -3675,25 +3642,22 @@ async function generatePDF(
 const fontWidthCache = new WeakMap<object, Map<string, number>>();
 
 function measureCached(font: any, fontSize: number, word: string): number {
+  const normalized = sanitizeForPDF(word);
+  assertPdfGlyphCoverage(
+    normalized,
+    font,
+    `PDF measurement ${JSON.stringify(normalized.slice(0, 80))}`,
+  );
+
   let cache = fontWidthCache.get(font);
   if (!cache) {
     cache = new Map<string, number>();
     fontWidthCache.set(font, cache);
   }
-  const key = `${fontSize}|${word}`;
+  const key = `${fontSize}|${normalized}`;
   let v = cache.get(key);
   if (v === undefined) {
-    try {
-      v = font.widthOfTextAtSize(word, fontSize) as number;
-    } catch {
-      // Last-resort WinAnsi guard — never let an unencodable glyph kill the export
-      const safe = sanitizeForPDF(word);
-      try {
-        v = font.widthOfTextAtSize(safe, fontSize) as number;
-      } catch {
-        v = safe.length * fontSize * 0.5;
-      }
-    }
+    v = font.widthOfTextAtSize(normalized, fontSize) as number;
     if (cache.size < 100_000) cache.set(key, v);
   }
   return v;
@@ -3909,12 +3873,14 @@ async function generateKDPPDF(
   ctx: ExportContext,
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
-  const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-  const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
-  const timesRomanItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
-  const timesRomanBoldItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
-  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const courier = await pdfDoc.embedFont(StandardFonts.Courier);
+  installUnicodePdfTextGuard(pdfDoc);
+  const unicodeFonts = await embedUnicodePdfInteriorFonts(pdfDoc);
+  const timesRoman = unicodeFonts.regular;
+  const timesRomanBold = unicodeFonts.bold;
+  const timesRomanItalic = unicodeFonts.italic;
+  const timesRomanBoldItalic = unicodeFonts.boldItalic;
+  const helvetica = unicodeFonts.sans;
+  const courier = unicodeFonts.mono;
 
   const pageWidth = trimSize.width;
   const pageHeight = trimSize.height;

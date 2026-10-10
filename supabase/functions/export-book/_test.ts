@@ -234,6 +234,44 @@ Deno.test("canonical PDF: malformed/unsupported content does not crash", async (
   assertValidPDF(bytes);
 });
 
+Deno.test("canonical PDF: preserves required Unicode fixture and Hebrew across styles", async () => {
+  const bytes = await renderPDF([
+    {
+      chapter_number: 1,
+      title: "Unicode",
+      content: [
+        "Required Unicode: ɛ ɔ α β ∑ ∫ ≤ ≥ — שלום.",
+        "",
+        "**Bold ɛ α ∑** and *italic ɔ β שלום*.",
+        "",
+        "```txt",
+        "ɛ ɔ α β ∑ ∫ ≤ ≥",
+        "```",
+      ].join("\n"),
+    },
+  ]);
+  assertValidPDF(bytes, 5_000);
+});
+
+Deno.test("canonical PDF: unsupported glyph fails loudly instead of disappearing", async () => {
+  let caught: unknown = null;
+  try {
+    await renderPDF([
+      {
+        chapter_number: 1,
+        title: "Unsupported",
+        content: "This unsupported glyph must not disappear: 漢",
+      },
+    ]);
+  } catch (error) {
+    caught = error;
+  }
+
+  assert(caught instanceof Error, "unsupported glyph should reject the PDF export");
+  assertEquals((caught as Error & { code?: string }).code, "PDF_UNSUPPORTED_GLYPH");
+  assert(caught.message.includes("U+6F22"), `expected U+6F22 in error, got: ${caught.message}`);
+});
+
 // =====================================================================
 // Canonical DOCX renderer tests
 // =====================================================================
