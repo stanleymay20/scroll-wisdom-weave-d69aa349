@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- pdf-lib/fontkit monkey-patching crosses an intentionally dynamic runtime boundary. */
-import fontkit from "@pdf-lib/fontkit";
-import bidiFactory from "bidi-js";
+import fontkit from "npm:@pdf-lib/fontkit@1.1.1";
+import bidiFactory from "npm:bidi-js@1.1.0";
 import {
   assertPdfGlyphCoverage,
   containsRtlScript,
@@ -17,11 +17,6 @@ export interface UnicodePdfFonts {
   mono: any;
 }
 
-// Keep the redistribution-safe DejaVu package pinned by the Deno import map.
-// Do not statically import package.json: this repository intentionally runs Deno
-// with nodeModulesDir="none", and package assets are resolved from Deno's npm
-// cache rather than a workspace node_modules tree.
-const DEJAVU_PACKAGE_JSON = import.meta.resolve("dejavu-fonts-ttf/package.json");
 const bidi = bidiFactory();
 const GUARDED_PAGE = Symbol("scrolllibrary-unicode-pdf-page");
 
@@ -34,8 +29,11 @@ let fontBytesPromise: Promise<{
 }> | null = null;
 
 async function readDejaVuFont(fileName: string): Promise<Uint8Array> {
-  const asset = new URL(`./ttf/${fileName}`, DEJAVU_PACKAGE_JSON);
-  return await Deno.readFile(asset);
+  // Resolve the already lock-pinned package directly through Deno's npm cache.
+  // This does not require a workspace node_modules directory and does not fetch
+  // a font over HTTP at render time.
+  const assetUrl = import.meta.resolve(`npm:dejavu-fonts-ttf@2.37.3/ttf/${fileName}`);
+  return await Deno.readFile(new URL(assetUrl));
 }
 
 async function loadFontBytes() {
@@ -101,8 +99,8 @@ export function installUnicodePdfTextGuard(pdfDoc: any): void {
  * embed subsets into the output PDF. DejaVu Sans is intentionally the primary
  * family because the print blocker requires one embedded family that covers
  * Akan Latin extensions, Greek, Hebrew and common mathematical symbols. The
- * package is resolved from the Deno npm cache/bundle; no runtime HTTP font
- * request is made.
+ * package is resolved from the Deno npm cache; no runtime HTTP font request is
+ * made by the renderer.
  */
 export async function embedUnicodePdfFonts(pdfDoc: any): Promise<UnicodePdfFonts> {
   pdfDoc.registerFontkit(fontkit);
