@@ -31,7 +31,7 @@ export const BILLING_PLAN_LIMITS: Readonly<Record<BillingPlanTier, BillingPlanLi
     audioCreditsPerMonth: 5,
     maxWordsPerChapter: 4_000,
     maxChaptersPerBook: 5,
-    marketplaceFeeBps: 1_500,
+    marketplaceFeeBps: 1_000,
     seats: 1,
   }),
   student: Object.freeze({
@@ -42,7 +42,7 @@ export const BILLING_PLAN_LIMITS: Readonly<Record<BillingPlanTier, BillingPlanLi
     audioCreditsPerMonth: 15,
     maxWordsPerChapter: 4_000,
     maxChaptersPerBook: 30,
-    marketplaceFeeBps: 1_000,
+    marketplaceFeeBps: 700,
     seats: 1,
   }),
   premium: Object.freeze({

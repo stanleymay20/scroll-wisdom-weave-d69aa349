@@ -29,18 +29,18 @@ export const SUBSCRIPTION_TIERS = {
       maxWordCount: 4000,
       exportFormats: ['pdf'],
       audioCredits: 5,
-      ttsMinutes: 5, // compatibility: one standard narration minute ~= one audio credit
+      ttsMinutes: 5,
       interactiveVoiceMinutes: 1.5,
       visualCredits: 0,
-      aiImageQuota: 0, // compatibility alias for standard image credits
+      aiImageQuota: 0,
       aiCovers: false,
-      commercialRights: true, // ownership/commercial rights are not paywalled
+      commercialRights: true,
       batchGeneration: false,
       prioritySupport: false,
       elevenLabsTTS: false,
       cinematicVideo: false,
       seats: 1,
-      marketplaceFeeBps: 1500,
+      marketplaceFeeBps: 1000,
       deepResearch: false,
       creatorBusinessHub: false,
       organizationTools: false,
@@ -64,13 +64,13 @@ export const SUBSCRIPTION_TIERS = {
       visualCredits: 10,
       aiImageQuota: 10,
       aiCovers: true,
-      commercialRights: true, // ownership/commercial rights are not paywalled
+      commercialRights: true,
       batchGeneration: false,
       prioritySupport: false,
       elevenLabsTTS: false,
       cinematicVideo: false,
       seats: 1,
-      marketplaceFeeBps: 1000,
+      marketplaceFeeBps: 700,
       deepResearch: false,
       creatorBusinessHub: false,
       organizationTools: false,
@@ -94,7 +94,7 @@ export const SUBSCRIPTION_TIERS = {
       visualCredits: 60,
       aiImageQuota: 60,
       aiCovers: true,
-      commercialRights: true, // ownership/commercial rights are not paywalled
+      commercialRights: true,
       batchGeneration: false,
       prioritySupport: true,
       elevenLabsTTS: false,
@@ -124,7 +124,7 @@ export const SUBSCRIPTION_TIERS = {
       visualCredits: 200,
       aiImageQuota: 200,
       aiCovers: true,
-      commercialRights: true, // ownership/commercial rights are not paywalled
+      commercialRights: true,
       batchGeneration: true,
       prioritySupport: true,
       prophetMode: true,
@@ -197,7 +197,7 @@ export const USAGE_ADDONS = {
     name: '+60 narration minutes',
     price: 15,
     priceCents: 1500,
-    audioCredits: 60, // compatibility: backend pool still uses audio credits/units
+    audioCredits: 60,
     narrationMinutes: 60,
     billingMode: 'one_time',
   },
@@ -274,8 +274,6 @@ export function getTTSMinutes(tier: SubscriptionTier): number {
   return SUBSCRIPTION_TIERS[tier].features.ttsMinutes;
 }
 
-// Ownership/commercial rights are not subscription entitlements. This helper is
-// retained for compatibility with older UI call sites and always returns true.
 export function hasCommercialRights(_tier: SubscriptionTier): boolean {
   return true;
 }
