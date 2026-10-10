@@ -148,9 +148,11 @@ export async function embedUnicodePdfFonts(pdfDoc: any): Promise<UnicodePdfFonts
   pdfDoc.registerFontkit(fontkit);
   const bytes = await loadCoreFontBytes();
 
+  // PDF subset names need a six-letter tag so inspection tools can identify
+  // the subsets that fontkit actually embeds. Tags are unique per style.
   const [regular, bold] = await Promise.all([
-    pdfDoc.embedFont(bytes.regular, { subset: true }),
-    pdfDoc.embedFont(bytes.bold, { subset: true }),
+    pdfDoc.embedFont(bytes.regular, { subset: true, customName: "SLREGU+DejaVuSans" }),
+    pdfDoc.embedFont(bytes.bold, { subset: true, customName: "SLBOLD+DejaVuSans-Bold" }),
   ]);
 
   return {
@@ -174,11 +176,11 @@ export async function embedUnicodePdfInteriorFonts(pdfDoc: any): Promise<Unicode
   ]);
 
   const [regular, bold, italic, boldItalic, mono] = await Promise.all([
-    pdfDoc.embedFont(core.regular, { subset: true }),
-    pdfDoc.embedFont(core.bold, { subset: true }),
-    pdfDoc.embedFont(extra.italic, { subset: true }),
-    pdfDoc.embedFont(extra.boldItalic, { subset: true }),
-    pdfDoc.embedFont(extra.mono, { subset: true }),
+    pdfDoc.embedFont(core.regular, { subset: true, customName: "SLREGU+DejaVuSans" }),
+    pdfDoc.embedFont(core.bold, { subset: true, customName: "SLBOLD+DejaVuSans-Bold" }),
+    pdfDoc.embedFont(extra.italic, { subset: true, customName: "SLITAL+DejaVuSans-Oblique" }),
+    pdfDoc.embedFont(extra.boldItalic, { subset: true, customName: "SLBOIT+DejaVuSans-BoldOblique" }),
+    pdfDoc.embedFont(extra.mono, { subset: true, customName: "SLMONO+DejaVuSansMono" }),
   ]);
 
   return {
