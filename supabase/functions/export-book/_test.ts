@@ -823,3 +823,14 @@ Label: Value`, "Table preservation");
     assertEquals(caught.code, "PDF_TABLE_LAYOUT_UNSUPPORTED");
   });
 }
+
+for (const path of ["legacy", "kdp"] as const) {
+  Deno.test(`${path} PDF: loose table excess cells reach the fail-loud guard`, async () => {
+    let caught: unknown;
+    try {
+      await renderUnicodePath(path, "| Name | Value |\n| A | ɛ | ɔ |\n| B | β | ∑ |\n\nFollowing prose.", "Loose table");
+    } catch (error) { caught = error; }
+    assert(caught instanceof PdfTableLayoutError);
+    assert(caught.message.includes("cells without corresponding headers"));
+  });
+}

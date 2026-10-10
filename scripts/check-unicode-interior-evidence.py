@@ -3,6 +3,7 @@ import json
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 root = Path(sys.argv[1])
@@ -38,6 +39,27 @@ for name in ("canonical", "legacy", "kdp"):
     prose = "This manuscript fixture exercises wrapping and page transitions with ɛ and ɔ."
     if normalized.count(prose) != 360:
         raise SystemExit(f"{name}: expected all 360 pagination-fixture sentences")
+    # Column coordinates prove empty cells/headers preserve their positions;
+    # finding both strings somewhere in extracted text would miss a shift.
+    bbox = subprocess.check_output(["pdftotext", "-bbox", str(pdf), "-"], text=True)
+    (root / f"{name}-bbox.html").write_text(bbox)
+    tree = ET.fromstring(bbox)
+    ns = {"x": "http://www.w3.org/1999/xhtml"}
+    positions = {}
+    for page_index, page in enumerate(tree.findall(".//x:page", ns)):
+        width, height = float(page.attrib["width"]), float(page.attrib["height"])
+        for word in page.findall(".//x:word", ns):
+            box = word.attrib
+            if not (0 <= float(box["xMin"]) <= float(box["xMax"]) <= width
+                    and 0 <= float(box["yMin"]) <= float(box["yMax"]) <= height):
+                raise SystemExit(f"{name}: text outside page bounds: {word.text!r}")
+            positions.setdefault(word.text, []).append((page_index, float(box["xMin"])))
+    for marker, header in (("LeftMarker", "LeftSlot"), ("MiddleMarker", "MiddleSlot"),
+                           ("RightMarker", "RightSlot"), ("BlankHeaderLeft", "HeadLeft"),
+                           ("BlankHeaderRight", "HeadRight")):
+        m, h = positions.get(marker, []), positions.get(header, [])
+        if len(m) != 1 or len(h) != 1 or m[0][0] != h[0][0] or abs(m[0][1] - h[0][1]) > 1:
+            raise SystemExit(f"{name}: {marker} shifted from {header} column: {m}, {h}")
     (root / f"{name}-pdfinfo.txt").write_text(subprocess.check_output(["pdfinfo", str(pdf)], text=True))
     subprocess.run(["pdftoppm", "-f", "5", "-l", "8", "-r", "90", "-png", str(pdf), str(root / name)], check=True)
 print(json.dumps({"unicode_interior_evidence": "pass", "qualification": "integration-only"}))

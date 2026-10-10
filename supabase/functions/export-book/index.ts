@@ -361,6 +361,14 @@ interface HeadingData {
 // Now prioritizes proper markdown pipe format for tables
 // Supports structured [CODE_BLOCK]...[/CODE_BLOCK] format
 // PRESERVES headings as structured data for proper export styling
+/** Remove pipe boundaries only; empty cells carry column-position semantics. */
+function parsePdfTableCells(line: string): string[] {
+  let content = line.trim();
+  if (content.startsWith("|")) content = content.slice(1);
+  if (content.endsWith("|")) content = content.slice(0, -1);
+  return content.split("|").map((cell) => stripInlineMarkdown(cell.trim()));
+}
+
 function processMarkdownContent(text: string): { 
   paragraphs: string[]; 
   codeBlocks: { lang: string; code: string }[]; 
@@ -439,9 +447,7 @@ function processMarkdownContent(text: string): {
     
     // Parse header row
     const headerLine = lines[0];
-    const headers = headerLine.split('|')
-      .filter((cell: string) => cell.trim())
-      .map((cell: string) => stripInlineMarkdown(cell.trim()));
+    const headers = parsePdfTableCells(headerLine);
     
     // Skip separator row (line with ---)
     // Parse data rows
@@ -449,10 +455,7 @@ function processMarkdownContent(text: string): {
     for (let i = 2; i < lines.length; i++) {
       const rowLine = lines[i];
       if (!rowLine.includes('|')) continue;
-      const cells = rowLine.split('|')
-        .filter((cell: string, idx: number, arr: string[]) => idx > 0 && idx < arr.length - 1 || cell.trim())
-        .map((cell: string) => stripInlineMarkdown(cell.trim()))
-        .filter((cell: string) => cell);
+      const cells = parsePdfTableCells(rowLine);
       if (cells.length > 0) {
         rows.push(cells);
       }
@@ -477,22 +480,14 @@ function processMarkdownContent(text: string): {
     const isSeparator = (l: string) => /^[\s|:\-]+$/.test(l) && /-/.test(l);
     const rows = rawLines.filter((l: string) => !isSeparator(l));
     if (rows.length < 2) return match;
-    const parseCells = (l: string) => {
-      const parts = l.split('|');
-      // Trim leading/trailing empty parts from pipe-bounded rows
-      if (parts.length && parts[0].trim() === '') parts.shift();
-      if (parts.length && parts[parts.length - 1].trim() === '') parts.pop();
-      return parts.map((c: string) => stripInlineMarkdown(c.trim()));
-    };
-    const headers = parseCells(rows[0]);
+    const headers = parsePdfTableCells(rows[0]);
     if (headers.length < 2) return match;
     const dataRows: string[][] = [];
     for (let i = 1; i < rows.length; i++) {
-      const cells = parseCells(rows[i]);
+      const cells = parsePdfTableCells(rows[i]);
       if (cells.length === 0) continue;
-      // Normalize row length to header count (pad or truncate)
+      // Pad short rows; retain excess cells for the fail-loud layout guard.
       while (cells.length < headers.length) cells.push('');
-      if (cells.length > headers.length) cells.length = headers.length;
       dataRows.push(cells);
     }
     if (dataRows.length === 0) return match;
