@@ -7,7 +7,7 @@
  * Run: deno test --allow-net --allow-env --allow-read supabase/functions/export-book/_test.ts
  */
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { generateCanonicalPDF } from "./index.ts";
+import { generateCanonicalPDF, generateKDPPDF } from "./index.ts";
 
 const PDF_MAGIC = "%PDF-";
 const MIN_PDF_BYTES = 2000; // cover + title + copyright + 1 chapter page is well above this
@@ -268,6 +268,52 @@ Deno.test("canonical PDF: unsupported glyph fails loudly instead of disappearing
   }
 
   assert(caught instanceof Error, "unsupported glyph should reject the PDF export");
+  assertEquals((caught as Error & { code?: string }).code, "PDF_UNSUPPORTED_GLYPH");
+  assert(caught.message.includes("U+6F22"), `expected U+6F22 in error, got: ${caught.message}`);
+});
+
+const KDP_UNICODE_PRINT_FIXTURE = "Akan ɛ ɔ · Greek α β · Math ∑ ∫ ≤ ≥ · Hebrew שלום";
+const KDP_UNICODE_CODE_FIXTURE = "ɛ ɔ α β ∑ ∫ ≤ ≥";
+
+async function renderKdpInteriorForTest(content: string) {
+  return await generateKDPPDF(
+    makeBook({ title: `KDP ${KDP_UNICODE_PRINT_FIXTURE}` }),
+    [{ chapter_number: 1, title: `Chapter ${KDP_UNICODE_PRINT_FIXTURE}`, content }],
+    `Author ${KDP_UNICODE_PRINT_FIXTURE}`,
+    "TEST-KDP-0001",
+    false,
+    2026,
+    null,
+    false,
+    "APA",
+    [],
+    { width: 432, height: 648, name: '6" × 9"' },
+    false,
+    ctx,
+  );
+}
+
+Deno.test("KDP interior PDF: preserves required Unicode fixture and Hebrew", async () => {
+  const bytes = await renderKdpInteriorForTest([
+    KDP_UNICODE_PRINT_FIXTURE,
+    "",
+    `**Bold ${KDP_UNICODE_PRINT_FIXTURE}** and *italic ${KDP_UNICODE_PRINT_FIXTURE}*.`,
+    "",
+    "```text",
+    KDP_UNICODE_CODE_FIXTURE,
+    "```",
+  ].join("\n"));
+  assertValidPDF(bytes, 5_000);
+});
+
+Deno.test("KDP interior PDF: unsupported glyph fails loudly with exact codepoint", async () => {
+  let caught: unknown = null;
+  try {
+    await renderKdpInteriorForTest("This unsupported glyph must not disappear: 漢");
+  } catch (error) {
+    caught = error;
+  }
+  assert(caught instanceof Error, "unsupported KDP glyph should reject the PDF export");
   assertEquals((caught as Error & { code?: string }).code, "PDF_UNSUPPORTED_GLYPH");
   assert(caught.message.includes("U+6F22"), `expected U+6F22 in error, got: ${caught.message}`);
 });

@@ -3868,7 +3868,7 @@ function escapeXml(text: string): string {
 
 // ===== KDP-COMPLIANT PDF Generation =====
 // Amazon KDP requires specific trim sizes, margins, and formatting
-async function generateKDPPDF(
+export async function generateKDPPDF(
   book: any,
   chapters: any[],
   author: string,
