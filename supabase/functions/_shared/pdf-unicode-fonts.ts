@@ -17,10 +17,13 @@ import {
 export interface UnicodePdfFonts {
   regular: any;
   bold: any;
-  italic: any;
-  boldItalic: any;
   sans: any;
   sansBold: any;
+}
+
+export interface UnicodePdfInteriorFonts extends UnicodePdfFonts {
+  italic: any;
+  boldItalic: any;
   mono: any;
 }
 
@@ -42,9 +45,12 @@ const createBidi: BidiFactory = typeof bidiFactoryModule === "function"
 const bidi = createBidi();
 const GUARDED_PAGE = Symbol("scrolllibrary-unicode-pdf-page");
 
-let fontBytesPromise: Promise<{
+let coreFontBytesPromise: Promise<{
   regular: Uint8Array;
   bold: Uint8Array;
+}> | null = null;
+
+let interiorExtraFontBytesPromise: Promise<{
   italic: Uint8Array;
   boldItalic: Uint8Array;
   mono: Uint8Array;
@@ -70,28 +76,25 @@ async function gunzipBase64(base64: string): Promise<Uint8Array> {
   return new Uint8Array(await new Response(decompressed).arrayBuffer());
 }
 
-async function loadFontBytes() {
-  if (!fontBytesPromise) {
-    // Font bytes are generated deterministically from DejaVu 2.37.3 and kept
-    // inside the TypeScript module graph. This deliberately avoids runtime
-    // filesystem permissions, external font downloads and deployment-specific
-    // static-file handling. Source hashes and the redistribution license live
-    // in `_shared/fonts/`.
-    fontBytesPromise = Promise.all([
+async function loadCoreFontBytes() {
+  if (!coreFontBytesPromise) {
+    coreFontBytesPromise = Promise.all([
       gunzipBase64(DEJAVU_SANS_REGULAR_GZIP_BASE64),
       gunzipBase64(DEJAVU_SANS_BOLD_GZIP_BASE64),
+    ]).then(([regular, bold]) => ({ regular, bold }));
+  }
+  return await coreFontBytesPromise;
+}
+
+async function loadInteriorExtraFontBytes() {
+  if (!interiorExtraFontBytesPromise) {
+    interiorExtraFontBytesPromise = Promise.all([
       gunzipBase64(DEJAVU_SANS_ITALIC_GZIP_BASE64),
       gunzipBase64(DEJAVU_SANS_BOLD_ITALIC_GZIP_BASE64),
       gunzipBase64(DEJAVU_SANS_MONO_GZIP_BASE64),
-    ]).then(([regular, bold, italic, boldItalic, mono]) => ({
-      regular,
-      bold,
-      italic,
-      boldItalic,
-      mono,
-    }));
+    ]).then(([italic, boldItalic, mono]) => ({ italic, boldItalic, mono }));
   }
-  return await fontBytesPromise;
+  return await interiorExtraFontBytesPromise;
 }
 
 /**
@@ -137,20 +140,45 @@ export function installUnicodePdfTextGuard(pdfDoc: any): void {
 }
 
 /**
- * Embed redistribution-safe DejaVu Sans subsets into the output PDF. All five
- * renderer styles are embedded so canonical, legacy and KDP interiors preserve
- * bold/italic/code semantics without falling back to WinAnsi standard fonts.
+ * Embed the same regular/bold font pair qualified by the KDP-cover slice.
+ * Keeping this function core-only preserves the already-green cover runtime
+ * and avoids paying to inflate/embed interior styles that a cover never uses.
  */
 export async function embedUnicodePdfFonts(pdfDoc: any): Promise<UnicodePdfFonts> {
   pdfDoc.registerFontkit(fontkit);
-  const bytes = await loadFontBytes();
+  const bytes = await loadCoreFontBytes();
 
-  const [regular, bold, italic, boldItalic, mono] = await Promise.all([
+  const [regular, bold] = await Promise.all([
     pdfDoc.embedFont(bytes.regular, { subset: true }),
     pdfDoc.embedFont(bytes.bold, { subset: true }),
-    pdfDoc.embedFont(bytes.italic, { subset: true }),
-    pdfDoc.embedFont(bytes.boldItalic, { subset: true }),
-    pdfDoc.embedFont(bytes.mono, { subset: true }),
+  ]);
+
+  return {
+    regular,
+    bold,
+    sans: regular,
+    sansBold: bold,
+  };
+}
+
+/**
+ * Embed the full interior style set without changing the cover API above.
+ * Canonical, legacy and KDP interiors keep bold/italic/code semantics while
+ * using Unicode-capable embedded fonts throughout.
+ */
+export async function embedUnicodePdfInteriorFonts(pdfDoc: any): Promise<UnicodePdfInteriorFonts> {
+  pdfDoc.registerFontkit(fontkit);
+  const [core, extra] = await Promise.all([
+    loadCoreFontBytes(),
+    loadInteriorExtraFontBytes(),
+  ]);
+
+  const [regular, bold, italic, boldItalic, mono] = await Promise.all([
+    pdfDoc.embedFont(core.regular, { subset: true }),
+    pdfDoc.embedFont(core.bold, { subset: true }),
+    pdfDoc.embedFont(extra.italic, { subset: true }),
+    pdfDoc.embedFont(extra.boldItalic, { subset: true }),
+    pdfDoc.embedFont(extra.mono, { subset: true }),
   ]);
 
   return {
