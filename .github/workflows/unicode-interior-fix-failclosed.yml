@@ -1,0 +1,76 @@
+name: Unicode Interior Fail-Closed Fix
+
+on:
+  push:
+    branches:
+      - fix/unicode-safe-pdf-interior
+    paths:
+      - .github/workflows/unicode-interior-fix-failclosed.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/unicode-safe-pdf-interior
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: 2.9.6
+      - run: bun install --frozen-lockfile
+      - name: Preserve fail-closed Unicode glyph errors across block rendering
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('supabase/functions/export-book/index.ts')
+          s = p.read_text()
+          old = '''      } catch (blockErr) {
+        // Single-block failure should NOT poison the whole render — log and move on
+        console.warn("[CANONICAL_PDF] block render error", block.kind, blockErr);
+        y -= 4;
+      }
+'''
+          new = '''      } catch (blockErr) {
+        // Unicode fidelity is a publication-integrity boundary, not a
+        // recoverable block-level rendering error. Never log-and-continue after
+        // the shared glyph guard has rejected content.
+        if (
+          blockErr &&
+          typeof blockErr === "object" &&
+          "code" in blockErr &&
+          (blockErr as { code?: unknown }).code === "PDF_UNSUPPORTED_GLYPH"
+        ) {
+          throw blockErr;
+        }
+        // Other isolated block failures retain the existing best-effort policy.
+        console.warn("[CANONICAL_PDF] block render error", block.kind, blockErr);
+        y -= 4;
+      }
+'''
+          assert s.count(old) == 1, 'canonical block error boundary drifted'
+          p.write_text(s.replace(old, new, 1))
+          PY
+          grep -q 'PDF_UNSUPPORTED_GLYPH' supabase/functions/export-book/index.ts
+      - name: Verify focused renderer behavior
+        run: |
+          deno check supabase/functions/export-book/index.ts
+          deno test --allow-net supabase/functions/export-book/_test.ts
+      - name: Commit verified source fix only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Stanley Osei-Wusu"
+          git config user.email "107648937+stanleymay20@users.noreply.github.com"
+          git add supabase/functions/export-book/index.ts
+          test "$(git diff --cached --name-only)" = "supabase/functions/export-book/index.ts"
+          git diff --cached --check
+          git commit -m "Propagate unsupported PDF glyph failures"
+          git push origin HEAD:fix/unicode-safe-pdf-interior
