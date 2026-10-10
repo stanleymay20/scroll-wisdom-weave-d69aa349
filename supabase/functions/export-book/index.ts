@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { PDFDocument, rgb, StandardFonts, PDFRawStream, pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, rgb, PDFRawStream, pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } from "https://esm.sh/pdf-lib@1.17.1";
 import * as zip from "https://deno.land/x/zipjs@v2.7.32/index.js";
 import { parseBookToCanonical } from "../_shared/canonicalContent.ts";
 import type { CanonicalDiagram } from "../_shared/canonicalContent.ts";
@@ -12,6 +12,9 @@ import { computeSha256Hex } from "../_shared/export/hash.ts";
 import { recordExportEvent } from "../_shared/export/audit.ts";
 import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";
 import { resolvePrepublicationIdentity } from "../_shared/publishingIdentity.ts";
+import { embedUnicodePdfInteriorFonts, installUnicodePdfTextGuard } from "../_shared/pdf-unicode-fonts.ts";
+import { PdfTableLayoutError, assertPdfTableContentFits, assertPdfTableGeometryFits } from "../_shared/pdf-table-layout.ts";
+import { assertPdfGlyphCoverage, normalizePdfText, UnsupportedPdfGlyphError, type PdfFontLike as PdfGlyphCoverageFont } from "../_shared/pdf-unicode.ts";
 
 // Disable zip.js web workers — Deno edge runtime + test runner leak worker
 // timers otherwise (no Worker pool to clean up).
@@ -203,7 +206,7 @@ function parseCustomTableFormat(text: string): { tables: ParsedTable[]; cleanedT
     
     if (headers.length > 0 && rows.length > 0) {
       tables.push({ name: tableName, headers, rows });
-      cleanedText = cleanedText.replace(fullMatch, `[CUSTOM_TABLE_${tables.length - 1}]`);
+      cleanedText = cleanedText.replace(fullMatch, `\n\n[CUSTOM_TABLE_${tables.length - 1}]\n\n`);
     }
   }
   
@@ -358,6 +361,14 @@ interface HeadingData {
 // Now prioritizes proper markdown pipe format for tables
 // Supports structured [CODE_BLOCK]...[/CODE_BLOCK] format
 // PRESERVES headings as structured data for proper export styling
+/** Remove pipe boundaries only; empty cells carry column-position semantics. */
+function parsePdfTableCells(line: string): string[] {
+  let content = line.trim();
+  if (content.startsWith("|")) content = content.slice(1);
+  if (content.endsWith("|")) content = content.slice(0, -1);
+  return content.split("|").map((cell) => stripInlineMarkdown(cell.trim()));
+}
+
 function processMarkdownContent(text: string): { 
   paragraphs: string[]; 
   codeBlocks: { lang: string; code: string }[]; 
@@ -436,9 +447,7 @@ function processMarkdownContent(text: string): {
     
     // Parse header row
     const headerLine = lines[0];
-    const headers = headerLine.split('|')
-      .filter((cell: string) => cell.trim())
-      .map((cell: string) => stripInlineMarkdown(cell.trim()));
+    const headers = parsePdfTableCells(headerLine);
     
     // Skip separator row (line with ---)
     // Parse data rows
@@ -446,10 +455,7 @@ function processMarkdownContent(text: string): {
     for (let i = 2; i < lines.length; i++) {
       const rowLine = lines[i];
       if (!rowLine.includes('|')) continue;
-      const cells = rowLine.split('|')
-        .filter((cell: string, idx: number, arr: string[]) => idx > 0 && idx < arr.length - 1 || cell.trim())
-        .map((cell: string) => stripInlineMarkdown(cell.trim()))
-        .filter((cell: string) => cell);
+      const cells = parsePdfTableCells(rowLine);
       if (cells.length > 0) {
         rows.push(cells);
       }
@@ -457,7 +463,7 @@ function processMarkdownContent(text: string): {
     
     if (headers.length > 0 && rows.length > 0) {
       tables.push({ name: tableName || 'Table', headers, rows });
-      return `[MD_TABLE_${tables.length - 1}]`;
+      return `\n\n[MD_TABLE_${tables.length - 1}]\n\n`;
     }
     return match;
   });
@@ -474,27 +480,19 @@ function processMarkdownContent(text: string): {
     const isSeparator = (l: string) => /^[\s|:\-]+$/.test(l) && /-/.test(l);
     const rows = rawLines.filter((l: string) => !isSeparator(l));
     if (rows.length < 2) return match;
-    const parseCells = (l: string) => {
-      const parts = l.split('|');
-      // Trim leading/trailing empty parts from pipe-bounded rows
-      if (parts.length && parts[0].trim() === '') parts.shift();
-      if (parts.length && parts[parts.length - 1].trim() === '') parts.pop();
-      return parts.map((c: string) => stripInlineMarkdown(c.trim()));
-    };
-    const headers = parseCells(rows[0]);
+    const headers = parsePdfTableCells(rows[0]);
     if (headers.length < 2) return match;
     const dataRows: string[][] = [];
     for (let i = 1; i < rows.length; i++) {
-      const cells = parseCells(rows[i]);
+      const cells = parsePdfTableCells(rows[i]);
       if (cells.length === 0) continue;
-      // Normalize row length to header count (pad or truncate)
+      // Pad short rows; retain excess cells for the fail-loud layout guard.
       while (cells.length < headers.length) cells.push('');
-      if (cells.length > headers.length) cells.length = headers.length;
       dataRows.push(cells);
     }
     if (dataRows.length === 0) return match;
     tables.push({ name: 'Table', headers, rows: dataRows });
-    return `[MD_TABLE_${tables.length - 1}]\n`;
+    return `\n\n[MD_TABLE_${tables.length - 1}]\n\n`;
   });
 
 
@@ -814,6 +812,7 @@ function drawPdfTable(
     addPageNumber,
     pageNumberRef,
   } = input;
+  assertPdfTableContentFits(headers, rows, { columns: 6, headerChars: 140, cellChars: 500 }, "PDF table");
   const safeHeaders = headers.filter((h) => h !== undefined && h !== null).slice(0, 6);
   if (safeHeaders.length === 0) return { page, y };
 
@@ -827,10 +826,12 @@ function drawPdfTable(
 
   const headerCells = safeHeaders.map((header) => {
     const wrapped = wrapText(stripInlineMarkdown((header || "").slice(0, 140)), fonts.bold, headerFontSize, Math.max(24, colWidth - 10));
-    return (wrapped.length ? wrapped : [""]).slice(0, 5);
+    if (wrapped.length > 5) throw new PdfTableLayoutError("PDF table header", "exceeds 5 wrapped lines");
+    return wrapped.length ? wrapped : [""];
   });
   const headerHeight = Math.max(1, ...headerCells.map((cell) => cell.length)) * headerLineHeight + 10;
   const wrappedRows = getWrappedTableRows(rows, cols, fonts.regular, cellFontSize, colWidth, 500);
+  assertPdfTableGeometryFits(headerHeight, wrappedRows.heights, pageHeight - margin - 30 - bottom, "PDF table");
 
   const drawHeader = () => {
     page.drawRectangle({
@@ -1043,8 +1044,8 @@ function drawStyledParagraph(
     }
     const spaceWidth = measureCached(font, fontSize, " ");
 
-    // WinAnsi guard: pdf-lib standard fonts throw on any non-Latin-1 glyph
-    // (e.g. "ᵢ" U+1D62 from LaTeX subscripts). Sanitize before measure + draw.
+    // Normalize printable Unicode before measure + draw; embedded fonts and
+    // the shared guard fail loudly if a glyph is unsupported.
     const words = sanitizeForPDF(run.text).split(/\s+/);
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
@@ -1100,51 +1101,12 @@ function markdownToDocxRuns(text: string): string {
 }
 
 /**
- * Sanitize text for PDF WinAnsi encoding — SINGLE-PASS character map
- * Replaces Unicode characters that cannot be encoded in WinAnsi
- * CRITICAL: Must be called on ALL text before drawText() in PDF generation
+ * Normalize printable manuscript Unicode for embedded-font PDF rendering.
+ * No transliteration or silent glyph deletion is permitted here. Unsupported
+ * glyphs are rejected by the shared coverage guard with precise code points.
  */
-const _pdfCharMap: Record<string, string> = {
-  '\u2192': '->', '\u2190': '<-', '\u2194': '<->', '\u21D2': '=>', '\u21D0': '<=', '\u21D4': '<=>', '\u2191': '^', '\u2193': 'v',
-  '\u2018': "'", '\u2019': "'", '\u201A': "'", '\u02BC': "'", '\u02B9': "'", '\u02BB': "'", '\u0060': "'", '\u00B4': "'",
-  '\u201C': '"', '\u201D': '"', '\u201E': '"', '\u201F': '"', '\u2033': '"',
-  '\u2032': "'", '\u2035': "'", '\u02CA': "'", '\u02CB': "'",
-  '\u2070': '0', '\u00B9': '1', '\u00B2': '2', '\u00B3': '3', '\u2074': '4', '\u2075': '5', '\u2076': '6', '\u2077': '7', '\u2078': '8', '\u2079': '9',
-  '\u207A': '+', '\u207B': '-', '\u207C': '=', '\u207D': '(', '\u207E': ')', '\u207F': 'n',
-  '\u2080': '0', '\u2081': '1', '\u2082': '2', '\u2083': '3', '\u2084': '4', '\u2085': '5', '\u2086': '6', '\u2087': '7', '\u2088': '8', '\u2089': '9',
-  '\u208A': '+', '\u208B': '-', '\u208C': '=', '\u208D': '(', '\u208E': ')',
-  '\u00D7': 'x', '\u00F7': '/', '\u2212': '-', '\u2013': '-', '\u2014': '-', '\u2026': '...', '\u2022': '-',
-  '\u25E6': 'o', '\u25AA': '-', '\u25B8': '>', '\u25B9': '>', '\u25C2': '<', '\u25C3': '<',
-  '\u2248': '~', '\u2260': '!=', '\u2264': '<=', '\u2265': '>=',
-  '\u221E': 'infinity', '\u03C0': 'pi', '\u03B1': 'alpha', '\u03B2': 'beta', '\u03B3': 'gamma', '\u03B4': 'delta',
-  '\u03B5': 'epsilon', '\u03B8': 'theta', '\u03BB': 'lambda', '\u03BC': 'mu', '\u03C3': 'sigma', '\u03C6': 'phi',
-  '\u03C9': 'omega', '\u03A9': 'Omega', '\u2211': 'sum', '\u220F': 'product', '\u221A': 'sqrt',
-  '\u222B': 'integral', '\u2202': 'd', '\u2206': 'delta', '\u2207': 'nabla',
-  '\u2122': '(TM)', '\u2120': '(SM)', '\u2117': '(P)',
-  // Subscript/superscript letters (LaTeX x_i, a_n, etc.) — WinAnsi cannot encode these
-  '\u1D62': 'i', '\u2C7C': 'j', '\u2096': 'k', '\u2099': 'n', '\u2098': 'm', '\u2090': 'a',
-  '\u2091': 'e', '\u2092': 'o', '\u2093': 'x', '\u2095': 'h', '\u209C': 't', '\u209A': 'p',
-  '\u209B': 's', '\u1D63': 'r', '\u1D64': 'u', '\u1D65': 'v', '\u2097': 'l',
-  '\u1D2C': 'A', '\u1D43': 'a', '\u1D47': 'b', '\u1D9C': 'c', '\u1D48': 'd', '\u1D49': 'e',
-  '\u1D57': 't', '\u02B0': 'h', '\u02B2': 'j', '\u02E1': 'l', '\u02B3': 'r',
-  '\u02E2': 's', '\u02B7': 'w', '\u02E3': 'x', '\u02B8': 'y',
-};
-
 function sanitizeForPDF(text: string): string {
-  if (!text) return "";
-  let result = '';
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    const code = ch.charCodeAt(0);
-    const mapped = _pdfCharMap[ch];
-    if (mapped !== undefined) {
-      result += mapped;
-    } else if (code <= 0xFF) {
-      result += ch; // Latin-1 range — safe for WinAnsi
-    }
-    // else: non-Latin-1 char not in map — drop silently
-  }
-  return result;
+  return normalizePdfText(text);
 }
 
 /**
@@ -1794,6 +1756,7 @@ serve(async (req) => {
             canonicalFallbackUsed = false;
             console.log("[EXPORT] canonical PDF render succeeded");
           } catch (e) {
+            if (e instanceof UnsupportedPdfGlyphError || e instanceof PdfTableLayoutError) throw e;
             canonicalFallbackUsed = true;
             console.warn("[EXPORT] canonical PDF render failed, falling back to legacy:", e);
             pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
@@ -1963,7 +1926,11 @@ serve(async (req) => {
   } catch (error) {
     console.error("[EXPORT] Error:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify(error instanceof UnsupportedPdfGlyphError
+        ? { error: error.message, code: error.code, glyphs: error.glyphs, context: error.context }
+        : error instanceof PdfTableLayoutError
+          ? { error: error.message, code: error.code, context: error.context }
+          : { error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -1975,6 +1942,20 @@ serve(async (req) => {
 // on exception. Reuses cover/title/copyright/TOC/bibliography/about shells
 // from the legacy renderer's design language for output parity.
 // =====================================================================
+function assertPdfManuscriptCoverage(book: { title?: string; category?: string }, chapters: { chapter_number?: number; title?: string; content?: string }[], author: string, bibliography: string[], ctx: ExportContext, font: PdfGlyphCoverageFont): void {
+  for (const [label, text] of [
+    ["book title", book.title], ["book category", book.category], ["author", author],
+    ["publisher", ctx.pub.publisher_name], ["imprint", ctx.pub.publisher_imprint],
+  ]) assertPdfGlyphCoverage(String(text ?? ""), font, String(label));
+  for (const chapter of chapters || []) {
+    assertPdfGlyphCoverage(chapter.title || "", font, `chapter ${chapter.chapter_number} title`);
+    // Validate before parsing, clipping captions/tables, or legacy fallback can
+    // hide an unsupported character in a source span that is not drawn.
+    assertPdfGlyphCoverage(chapter.content || "", font, `chapter ${chapter.chapter_number} source`);
+  }
+  for (const ref of bibliography) assertPdfGlyphCoverage(ref, font, "bibliography");
+}
+
 export async function generateCanonicalPDF(
   book: any,
   chapters: any[],
@@ -1997,12 +1978,15 @@ export async function generateCanonicalPDF(
   );
 
   const pdfDoc = await PDFDocument.create();
-  const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-  const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
-  const timesRomanItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
-  const timesRomanBoldItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
-  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const courier = await pdfDoc.embedFont(StandardFonts.Courier);
+  installUnicodePdfTextGuard(pdfDoc);
+  const unicodeFonts = await embedUnicodePdfInteriorFonts(pdfDoc);
+  assertPdfManuscriptCoverage(book, chapters, author, bibliography, ctx, unicodeFonts.regular);
+  const timesRoman = unicodeFonts.regular;
+  const timesRomanBold = unicodeFonts.bold;
+  const timesRomanItalic = unicodeFonts.italic;
+  const timesRomanBoldItalic = unicodeFonts.boldItalic;
+  const helvetica = unicodeFonts.sans;
+  const courier = unicodeFonts.mono;
   const bodyFonts = { regular: timesRoman, bold: timesRomanBold, italic: timesRomanItalic, boldItalic: timesRomanBoldItalic };
 
   const pageWidth = 612;
@@ -2459,7 +2443,18 @@ export async function generateCanonicalPDF(
           }
         }
       } catch (blockErr) {
-        // Single-block failure should NOT poison the whole render — log and move on
+        // Unicode fidelity is a publication-integrity boundary, not a
+        // recoverable block-level rendering error. Never log-and-continue after
+        // a glyph or table layout guard has rejected content.
+        if (
+          blockErr &&
+          typeof blockErr === "object" &&
+          "code" in blockErr &&
+          ["PDF_UNSUPPORTED_GLYPH", "PDF_TABLE_LAYOUT_UNSUPPORTED"].includes(String((blockErr as { code?: unknown }).code))
+        ) {
+          throw blockErr;
+        }
+        // Other isolated block failures retain the existing best-effort policy.
         console.warn("[CANONICAL_PDF] block render error", block.kind, blockErr);
         y -= 4;
       }
@@ -2525,7 +2520,7 @@ export async function generateCanonicalPDF(
 
 // ===== PDF Generation with Cover Page, TOC, and References =====
 
-async function generatePDF(
+export async function generatePDF(
   book: any, 
   chapters: any[], 
   author: string, 
@@ -2539,12 +2534,15 @@ async function generatePDF(
   ctx: ExportContext,
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
-  const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-  const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
-  const timesRomanItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
-  const timesRomanBoldItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
-  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const courier = await pdfDoc.embedFont(StandardFonts.Courier); // Monospace for code
+  installUnicodePdfTextGuard(pdfDoc);
+  const unicodeFonts = await embedUnicodePdfInteriorFonts(pdfDoc);
+  assertPdfManuscriptCoverage(book, chapters, author, bibliography, ctx, unicodeFonts.regular);
+  const timesRoman = unicodeFonts.regular;
+  const timesRomanBold = unicodeFonts.bold;
+  const timesRomanItalic = unicodeFonts.italic;
+  const timesRomanBoldItalic = unicodeFonts.boldItalic;
+  const helvetica = unicodeFonts.sans;
+  const courier = unicodeFonts.mono;
   
   const bodyFonts = { regular: timesRoman, bold: timesRomanBold, italic: timesRomanItalic, boldItalic: timesRomanBoldItalic };
   
@@ -3258,6 +3256,7 @@ async function generatePDF(
         if (table) {
           y -= 10;
           
+          assertPdfTableContentFits(table.headers, table.rows, { columns: 6, headerChars: 120, cellChars: 400 }, "Legacy PDF table");
           const numCols = Math.min(table.headers.length, 6);
           const colWidth = textWidth / numCols;
           const cellFontSize = 8;
@@ -3268,7 +3267,8 @@ async function generatePDF(
           const headerCellLines: string[][] = [];
           let headerMaxLines = 1;
           for (let i = 0; i < numCols; i++) {
-            const wrapped = wrapText(stripInlineMarkdown((table.headers[i] || '').slice(0, 120)), timesRomanBold, 9, colWidth - 10).slice(0, 3);
+            const wrapped = wrapText(stripInlineMarkdown(table.headers[i] || ''), timesRomanBold, 9, colWidth - 10);
+            if (wrapped.length > 3) throw new PdfTableLayoutError("Legacy PDF table header", "exceeds 3 wrapped lines");
             headerCellLines.push(wrapped);
             headerMaxLines = Math.max(headerMaxLines, wrapped.length);
           }
@@ -3286,6 +3286,7 @@ async function generatePDF(
             rowHeights.push(maxLines * cellLineHeight + cellPadding);
           }
           
+          assertPdfTableGeometryFits(headerHeight, rowHeights, pageHeight - 2 * margin - 60, "Legacy PDF table");
           const totalTableHeight = headerHeight + rowHeights.reduce((s, h) => s + h, 0) + 30;
           
           if (y - Math.min(totalTableHeight, 200) < margin + 30) {
@@ -3367,6 +3368,7 @@ async function generatePDF(
           // Render markdown table with dynamic row heights
           y -= 10;
           
+          assertPdfTableContentFits(table.headers, table.rows, { columns: 6, headerChars: 120, cellChars: 400 }, "Legacy PDF table");
           const numCols = Math.min(table.headers.length, 6);
           const colWidth = textWidth / numCols;
           const cellFontSize = 8;
@@ -3377,7 +3379,8 @@ async function generatePDF(
           const headerCellLines: string[][] = [];
           let headerMaxLines = 1;
           for (let i = 0; i < numCols; i++) {
-            const wrapped = wrapText(stripInlineMarkdown((table.headers[i] || '').slice(0, 120)), timesRomanBold, 9, colWidth - 10).slice(0, 3);
+            const wrapped = wrapText(stripInlineMarkdown(table.headers[i] || ''), timesRomanBold, 9, colWidth - 10);
+            if (wrapped.length > 3) throw new PdfTableLayoutError("Legacy PDF table header", "exceeds 3 wrapped lines");
             headerCellLines.push(wrapped);
             headerMaxLines = Math.max(headerMaxLines, wrapped.length);
           }
@@ -3395,6 +3398,7 @@ async function generatePDF(
             rowHeights.push(maxLines * cellLineHeight + cellPadding);
           }
           
+          assertPdfTableGeometryFits(headerHeight, rowHeights, pageHeight - 2 * margin - 60, "Legacy PDF table");
           const totalTableHeight = headerHeight + rowHeights.reduce((s, h) => s + h, 0) + 30;
           
           // Start table on new page if it won't fit
@@ -3675,25 +3679,22 @@ async function generatePDF(
 const fontWidthCache = new WeakMap<object, Map<string, number>>();
 
 function measureCached(font: any, fontSize: number, word: string): number {
+  const normalized = sanitizeForPDF(word);
+  assertPdfGlyphCoverage(
+    normalized,
+    font,
+    `PDF measurement ${JSON.stringify(normalized.slice(0, 80))}`,
+  );
+
   let cache = fontWidthCache.get(font);
   if (!cache) {
     cache = new Map<string, number>();
     fontWidthCache.set(font, cache);
   }
-  const key = `${fontSize}|${word}`;
+  const key = `${fontSize}|${normalized}`;
   let v = cache.get(key);
   if (v === undefined) {
-    try {
-      v = font.widthOfTextAtSize(word, fontSize) as number;
-    } catch {
-      // Last-resort WinAnsi guard — never let an unencodable glyph kill the export
-      const safe = sanitizeForPDF(word);
-      try {
-        v = font.widthOfTextAtSize(safe, fontSize) as number;
-      } catch {
-        v = safe.length * fontSize * 0.5;
-      }
-    }
+    v = font.widthOfTextAtSize(normalized, fontSize) as number;
     if (cache.size < 100_000) cache.set(key, v);
   }
   return v;
@@ -3893,7 +3894,45 @@ function escapeXml(text: string): string {
 
 // ===== KDP-COMPLIANT PDF Generation =====
 // Amazon KDP requires specific trim sizes, margins, and formatting
-async function generateKDPPDF(
+export async function generateKDPPDF(
+  book: Parameters<typeof renderKDPPDF>[0],
+  chapters: Parameters<typeof renderKDPPDF>[1],
+  author: string,
+  identifier: string,
+  isISBN: boolean,
+  year: number,
+  coverImageBytes: Uint8Array | null,
+  isAcademic: boolean,
+  citationStyle: string,
+  bibliography: string[],
+  trimSize: { width: number; height: number; name: string },
+  useBleed: boolean,
+  ctx: ExportContext,
+): Promise<Uint8Array> {
+  const args = [book, chapters, author, identifier, isISBN, year, coverImageBytes,
+    isAcademic, citationStyle, bibliography, trimSize, useBleed, ctx] as const;
+  let pdfDoc = await renderKDPPDF(...args, 0);
+  const totalWords = chapters.reduce((sum: number, ch) => sum + (ch.content?.split(/\s+/).length || 0), 0);
+  const estimatedPages = Math.max(24, Math.ceil(totalWords / 250) + 10);
+  // KDP uses the final page count, rounded to even, rather than word estimates.
+  const actualPages = Math.ceil(pdfDoc.getPageCount() / 2) * 2;
+  const requiredInside = actualPages <= 150 ? 27 : actualPages <= 300 ? 36
+    : actualPages <= 500 ? 45 : actualPages <= 700 ? 54 : 63;
+  if (getKDPMargins(estimatedPages, useBleed).inside < requiredInside) {
+    // The existing largest gutter (76pt) exceeds every KDP band. Reflow once;
+    // save only the final layout so a failed draft never becomes an artifact.
+    pdfDoc = await renderKDPPDF(...args, actualPages);
+    const finalPages = Math.ceil(pdfDoc.getPageCount() / 2) * 2;
+    const finalRequired = finalPages <= 150 ? 27 : finalPages <= 300 ? 36
+      : finalPages <= 500 ? 45 : finalPages <= 700 ? 54 : 63;
+    if (getKDPMargins(actualPages, useBleed).inside < finalRequired) {
+      throw new Error("KDP_GUTTER_LAYOUT_UNSUPPORTED:" + finalPages);
+    }
+  }
+  return pdfDoc.save();
+}
+
+async function renderKDPPDF(
   book: any,
   chapters: any[],
   author: string,
@@ -3907,14 +3946,18 @@ async function generateKDPPDF(
   trimSize: { width: number; height: number; name: string },
   useBleed: boolean,
   ctx: ExportContext,
-): Promise<Uint8Array> {
+  gutterPageCountFloor: number,
+): Promise<PDFDocument> {
   const pdfDoc = await PDFDocument.create();
-  const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-  const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
-  const timesRomanItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
-  const timesRomanBoldItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
-  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const courier = await pdfDoc.embedFont(StandardFonts.Courier);
+  installUnicodePdfTextGuard(pdfDoc);
+  const unicodeFonts = await embedUnicodePdfInteriorFonts(pdfDoc);
+  assertPdfManuscriptCoverage(book, chapters, author, bibliography, ctx, unicodeFonts.regular);
+  const timesRoman = unicodeFonts.regular;
+  const timesRomanBold = unicodeFonts.bold;
+  const timesRomanItalic = unicodeFonts.italic;
+  const timesRomanBoldItalic = unicodeFonts.boldItalic;
+  const helvetica = unicodeFonts.sans;
+  const courier = unicodeFonts.mono;
 
   const pageWidth = trimSize.width;
   const pageHeight = trimSize.height;
@@ -3922,7 +3965,7 @@ async function generateKDPPDF(
   // Estimate page count for gutter margin calculation
   const totalWords = chapters.reduce((sum: number, ch: any) => sum + (ch.content?.split(/\s+/).length || 0), 0);
   const estimatedPages = Math.max(24, Math.ceil(totalWords / 250) + 10);
-  const margins = getKDPMargins(estimatedPages, useBleed);
+  const margins = getKDPMargins(Math.max(estimatedPages, gutterPageCountFloor), useBleed);
 
   const textWidth = pageWidth - margins.inside - margins.outside;
   const textTop = pageHeight - margins.top - 20;
@@ -3938,7 +3981,7 @@ async function generateKDPPDF(
     const numW = helvetica.widthOfTextAtSize(numStr, 9);
     const numX = isRecto ? pageWidth - margins.outside - numW : margins.outside;
     page.drawText(numStr, {
-      x: numX, y: margins.bottom, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.4),
+      x: numX, y: margins.bottom + 3, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.4),
     });
     if (currentChapterTitle) {
       const headerText = isRecto
@@ -3947,7 +3990,7 @@ async function generateKDPPDF(
       const headerW = helvetica.widthOfTextAtSize(sanitizeForPDF(headerText), 8);
       const headerX = isRecto ? pageWidth - margins.outside - headerW : margins.outside;
       page.drawText(sanitizeForPDF(headerText), {
-        x: headerX, y: pageHeight - margins.top - 5, size: 8, font: helvetica, color: rgb(0.5, 0.5, 0.5),
+        x: headerX, y: pageHeight - margins.top - 8, size: 8, font: helvetica, color: rgb(0.5, 0.5, 0.5),
       });
     }
   };
@@ -4233,6 +4276,7 @@ async function generateKDPPDF(
         const table = processed.tables[parseInt(mdTableMatch[1])];
         if (table) {
           y -= 8;
+          assertPdfTableContentFits(table.headers, table.rows, { columns: 5, headerChars: 120, cellChars: 300 }, "KDP table");
           const numCols = Math.min(table.headers.length, 5);
           const colWidth = textWidth / numCols;
           const cellFontSize = 7.5;
@@ -4243,7 +4287,8 @@ async function generateKDPPDF(
           const kdpHeaderLines: string[][] = [];
           let kdpHeaderMax = 1;
           for (let i = 0; i < numCols; i++) {
-            const wr = wrapText(stripInlineMarkdown((table.headers[i] || '').slice(0, 120)), timesRomanBold, cellFontSize, colWidth - 8).slice(0, 3);
+            const wr = wrapText(stripInlineMarkdown(table.headers[i] || ''), timesRomanBold, cellFontSize, colWidth - 8);
+            if (wr.length > 3) throw new PdfTableLayoutError("KDP table header", "exceeds 3 wrapped lines");
             kdpHeaderLines.push(wr);
             kdpHeaderMax = Math.max(kdpHeaderMax, wr.length);
           }
@@ -4261,6 +4306,7 @@ async function generateKDPPDF(
             kdpRowHeights.push(maxLines * cellLineH + cellPad);
           }
           
+          assertPdfTableGeometryFits(headerHeight, kdpRowHeights, textTop - 15 - (textBottom + 12), "KDP table");
           const totalH = headerHeight + kdpRowHeights.reduce((s, h) => s + h, 0) + 20;
           if (y - Math.min(totalH, 150) < textBottom + 20) {
             addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
@@ -4319,6 +4365,7 @@ async function generateKDPPDF(
         const table = processed.customTables[parseInt(customTableMatch[1])];
         if (table) {
           y -= 8;
+          assertPdfTableContentFits(table.headers, table.rows, { columns: 5, headerChars: 120, cellChars: 300 }, "KDP table");
           const numCols = Math.min(table.headers.length, 5);
           const colWidth = textWidth / numCols;
           const cellFontSize = 7.5;
@@ -4329,7 +4376,8 @@ async function generateKDPPDF(
           const kdpCHeaderLines: string[][] = [];
           let kdpCHeaderMax = 1;
           for (let i = 0; i < numCols; i++) {
-            const wr = wrapText(stripInlineMarkdown((table.headers[i] || '').slice(0, 120)), timesRomanBold, cellFontSize, colWidth - 8).slice(0, 3);
+            const wr = wrapText(stripInlineMarkdown(table.headers[i] || ''), timesRomanBold, cellFontSize, colWidth - 8);
+            if (wr.length > 3) throw new PdfTableLayoutError("KDP table header", "exceeds 3 wrapped lines");
             kdpCHeaderLines.push(wr);
             kdpCHeaderMax = Math.max(kdpCHeaderMax, wr.length);
           }
@@ -4346,6 +4394,7 @@ async function generateKDPPDF(
             kdpCRowHeights.push(maxLines * cellLineH + cellPad);
           }
           
+          assertPdfTableGeometryFits(headerHeight, kdpCRowHeights, textTop - 15 - (textBottom + 12), "KDP table");
           const totalH = headerHeight + kdpCRowHeights.reduce((s, h) => s + h, 0) + 20;
           if (y - Math.min(totalH, 150) < textBottom + 20) {
             addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
@@ -4450,10 +4499,16 @@ async function generateKDPPDF(
         const bodyText = trimmed.replace(/^[-\u2022]\s|^\d+[.)]\s/, '');
         const words = bodyText.split(/\s+/);
         let line = prefix;
+        // pdf-lib sums glyph advances. Measure each normalized word once and
+        // accumulate widths instead of reshaping the growing line per word.
+        const spaceWidth = measureCached(timesRoman, bodySize, " ");
+        let lineWidth = measureCached(timesRoman, bodySize, prefix);
 
         for (const word of words) {
-          const testLine = line + (line && !prefix ? ' ' : line === prefix ? '' : ' ') + word;
-          const testW = timesRoman.widthOfTextAtSize(sanitizeForPDF(testLine), bodySize);
+          const separator = line && !prefix ? ' ' : line === prefix ? '' : ' ';
+          const testLine = line + separator + word;
+          const wordWidth = measureCached(timesRoman, bodySize, word);
+          const testW = lineWidth + (separator ? spaceWidth : 0) + wordWidth;
           if (testW > textWidth - indent && line !== prefix) {
             if (y < textBottom + 12) {
               addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
@@ -4467,8 +4522,10 @@ async function generateKDPPDF(
             });
             y -= lineHeight;
             line = word;
+            lineWidth = wordWidth;
           } else {
             line = testLine;
+            lineWidth = testW;
           }
         }
         if (line) {
@@ -4529,7 +4586,7 @@ async function generateKDPPDF(
     pdfDoc.setProducer(ctx.showBranding ? 'ScrollLibrary KDP Export' : (ctx.pub.publisher_name || author));
   }
 
-  return pdfDoc.save();
+  return pdfDoc;
 }
 
 function kdpWrapText(text: string, font: any, size: number, maxWidth: number): string[] {

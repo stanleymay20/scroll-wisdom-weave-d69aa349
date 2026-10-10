@@ -3,6 +3,9 @@ import fontkit from "npm:@pdf-lib/fontkit@1.1.1";
 import bidiFactoryImport from "npm:bidi-js@1.1.0";
 import {
   DEJAVU_SANS_BOLD_GZIP_BASE64,
+  DEJAVU_SANS_BOLD_ITALIC_GZIP_BASE64,
+  DEJAVU_SANS_ITALIC_GZIP_BASE64,
+  DEJAVU_SANS_MONO_GZIP_BASE64,
   DEJAVU_SANS_REGULAR_GZIP_BASE64,
 } from "./pdf-unicode-font-data.ts";
 import {
@@ -16,6 +19,12 @@ export interface UnicodePdfFonts {
   bold: any;
   sans: any;
   sansBold: any;
+}
+
+export interface UnicodePdfInteriorFonts extends UnicodePdfFonts {
+  italic: any;
+  boldItalic: any;
+  mono: any;
 }
 
 interface BidiApi {
@@ -36,9 +45,15 @@ const createBidi: BidiFactory = typeof bidiFactoryModule === "function"
 const bidi = createBidi();
 const GUARDED_PAGE = Symbol("scrolllibrary-unicode-pdf-page");
 
-let fontBytesPromise: Promise<{
+let coreFontBytesPromise: Promise<{
   regular: Uint8Array;
   bold: Uint8Array;
+}> | null = null;
+
+let interiorExtraFontBytesPromise: Promise<{
+  italic: Uint8Array;
+  boldItalic: Uint8Array;
+  mono: Uint8Array;
 }> | null = null;
 
 function decodeBase64(base64: string): Uint8Array {
@@ -61,19 +76,25 @@ async function gunzipBase64(base64: string): Promise<Uint8Array> {
   return new Uint8Array(await new Response(decompressed).arrayBuffer());
 }
 
-async function loadFontBytes() {
-  if (!fontBytesPromise) {
-    // Font bytes are generated deterministically from DejaVu 2.37.3 and kept
-    // inside the TypeScript module graph. This deliberately avoids runtime
-    // filesystem permissions, external font downloads and deployment-specific
-    // static-file handling. Source hashes and the redistribution license live
-    // in `_shared/fonts/`.
-    fontBytesPromise = Promise.all([
+async function loadCoreFontBytes() {
+  if (!coreFontBytesPromise) {
+    coreFontBytesPromise = Promise.all([
       gunzipBase64(DEJAVU_SANS_REGULAR_GZIP_BASE64),
       gunzipBase64(DEJAVU_SANS_BOLD_GZIP_BASE64),
     ]).then(([regular, bold]) => ({ regular, bold }));
   }
-  return await fontBytesPromise;
+  return await coreFontBytesPromise;
+}
+
+async function loadInteriorExtraFontBytes() {
+  if (!interiorExtraFontBytesPromise) {
+    interiorExtraFontBytesPromise = Promise.all([
+      gunzipBase64(DEJAVU_SANS_ITALIC_GZIP_BASE64),
+      gunzipBase64(DEJAVU_SANS_BOLD_ITALIC_GZIP_BASE64),
+      gunzipBase64(DEJAVU_SANS_MONO_GZIP_BASE64),
+    ]).then(([italic, boldItalic, mono]) => ({ italic, boldItalic, mono }));
+  }
+  return await interiorExtraFontBytesPromise;
 }
 
 /**
@@ -119,18 +140,19 @@ export function installUnicodePdfTextGuard(pdfDoc: any): void {
 }
 
 /**
- * Embed redistribution-safe DejaVu Sans subsets into the output PDF. The cover
- * slice intentionally carries only regular and bold because those are the only
- * styles the existing KDP cover renderer uses. Interior italic/mono fonts stay
- * out of this PR until the interior renderer is separately qualified.
+ * Embed the same regular/bold font pair qualified by the KDP-cover slice.
+ * Keeping this function core-only preserves the already-green cover runtime
+ * and avoids paying to inflate/embed interior styles that a cover never uses.
  */
 export async function embedUnicodePdfFonts(pdfDoc: any): Promise<UnicodePdfFonts> {
   pdfDoc.registerFontkit(fontkit);
-  const bytes = await loadFontBytes();
+  const bytes = await loadCoreFontBytes();
 
+  // PDF subset names need a six-letter tag so inspection tools can identify
+  // the subsets that fontkit actually embeds. Tags are unique per style.
   const [regular, bold] = await Promise.all([
-    pdfDoc.embedFont(bytes.regular, { subset: true }),
-    pdfDoc.embedFont(bytes.bold, { subset: true }),
+    pdfDoc.embedFont(bytes.regular, { subset: true, customName: "SLREGU+DejaVuSans" }),
+    pdfDoc.embedFont(bytes.bold, { subset: true, customName: "SLBOLD+DejaVuSans-Bold" }),
   ]);
 
   return {
@@ -138,5 +160,36 @@ export async function embedUnicodePdfFonts(pdfDoc: any): Promise<UnicodePdfFonts
     bold,
     sans: regular,
     sansBold: bold,
+  };
+}
+
+/**
+ * Embed the full interior style set without changing the cover API above.
+ * Canonical, legacy and KDP interiors keep bold/italic/code semantics while
+ * using Unicode-capable embedded fonts throughout.
+ */
+export async function embedUnicodePdfInteriorFonts(pdfDoc: any): Promise<UnicodePdfInteriorFonts> {
+  pdfDoc.registerFontkit(fontkit);
+  const [core, extra] = await Promise.all([
+    loadCoreFontBytes(),
+    loadInteriorExtraFontBytes(),
+  ]);
+
+  const [regular, bold, italic, boldItalic, mono] = await Promise.all([
+    pdfDoc.embedFont(core.regular, { subset: true, customName: "SLREGU+DejaVuSans" }),
+    pdfDoc.embedFont(core.bold, { subset: true, customName: "SLBOLD+DejaVuSans-Bold" }),
+    pdfDoc.embedFont(extra.italic, { subset: true, customName: "SLITAL+DejaVuSans-Oblique" }),
+    pdfDoc.embedFont(extra.boldItalic, { subset: true, customName: "SLBOIT+DejaVuSans-BoldOblique" }),
+    pdfDoc.embedFont(extra.mono, { subset: true, customName: "SLMONO+DejaVuSansMono" }),
+  ]);
+
+  return {
+    regular,
+    bold,
+    italic,
+    boldItalic,
+    sans: regular,
+    sansBold: bold,
+    mono,
   };
 }

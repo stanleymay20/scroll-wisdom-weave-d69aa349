@@ -8,6 +8,9 @@ export interface UnsupportedPdfGlyph {
 }
 
 const RTL_SCRIPT = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/u;
+// Embedded font coverage is immutable; avoid rebuilding thousands of codepoints
+// for every measured word and draw call in a book-length manuscript.
+const characterSets = new WeakMap<PdfFontLike, ReadonlySet<number>>();
 
 function isPrintablePdfCodePoint(codePoint: number): boolean {
   // Preserve TAB/LF/CR for layout code. Drop the remaining C0 controls and DEL.
@@ -39,7 +42,11 @@ export function findUnsupportedPdfGlyphs(
   font: PdfFontLike,
 ): UnsupportedPdfGlyph[] {
   const normalized = normalizePdfText(text);
-  const supported = new Set(font.getCharacterSet());
+  let supported = characterSets.get(font);
+  if (!supported) {
+    supported = new Set(font.getCharacterSet());
+    characterSets.set(font, supported);
+  }
   const missing = new Map<number, UnsupportedPdfGlyph>();
 
   for (const character of normalized) {

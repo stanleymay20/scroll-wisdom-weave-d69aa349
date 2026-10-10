@@ -319,6 +319,19 @@ jobs:
           deno test supabase/functions/export-publication/index.test.ts
           deno test supabase/functions/_shared/__tests__/export-integrity.test.ts
           deno test supabase/functions/_shared/export/__tests__/s6a-extraction.test.ts
+      - name: Prove interior PDF embedded fonts and Unicode extraction
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y poppler-utils
+          deno run --config supabase/functions/deno.json --allow-net --allow-write=tmp/unicode-interior-evidence scripts/render-unicode-interior-evidence.ts tmp/unicode-interior-evidence
+          python3 scripts/check-unicode-interior-evidence.py tmp/unicode-interior-evidence
+      - name: Archive exact-head Unicode interior evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: unicode-interior-${{ env.RELEASE_COMMIT_SHA }}
+          path: tmp/unicode-interior-evidence/
+          if-no-files-found: error
+          retention-days: 30
       - name: Test AI routing, attribution and risk scoring
         run: |
           deno test supabase/functions/_shared/ai-router.test.ts

@@ -7,7 +7,7 @@
  * Run: deno test --allow-net --allow-env --allow-read supabase/functions/export-book/_test.ts
  */
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { generateCanonicalPDF } from "./index.ts";
+import { generateCanonicalPDF, generatePDF, generateKDPPDF } from "./index.ts";
 
 const PDF_MAGIC = "%PDF-";
 const MIN_PDF_BYTES = 2000; // cover + title + copyright + 1 chapter page is well above this
@@ -232,6 +232,90 @@ Deno.test("canonical PDF: malformed/unsupported content does not crash", async (
   ]);
   // Renderer must complete without throwing; output must still be a valid PDF.
   assertValidPDF(bytes);
+});
+
+Deno.test("canonical PDF: preserves required Unicode fixture and Hebrew across styles", async () => {
+  const bytes = await renderPDF([
+    {
+      chapter_number: 1,
+      title: "Unicode",
+      content: [
+        "Required Unicode: ɛ ɔ α β ∑ ∫ ≤ ≥ — שלום.",
+        "",
+        "**Bold ɛ α ∑** and *italic ɔ β שלום*.",
+        "",
+        "```txt",
+        "ɛ ɔ α β ∑ ∫ ≤ ≥",
+        "```",
+      ].join("\n"),
+    },
+  ]);
+  assertValidPDF(bytes, 5_000);
+});
+
+Deno.test("canonical PDF: unsupported glyph fails loudly instead of disappearing", async () => {
+  let caught: unknown = null;
+  try {
+    await renderPDF([
+      {
+        chapter_number: 1,
+        title: "Unsupported",
+        content: "This unsupported glyph must not disappear: 漢",
+      },
+    ]);
+  } catch (error) {
+    caught = error;
+  }
+
+  assert(caught instanceof Error, "unsupported glyph should reject the PDF export");
+  assertEquals((caught as Error & { code?: string }).code, "PDF_UNSUPPORTED_GLYPH");
+  assert(caught.message.includes("U+6F22"), `expected U+6F22 in error, got: ${caught.message}`);
+});
+
+const KDP_UNICODE_PRINT_FIXTURE = "Akan ɛ ɔ · Greek α β · Math ∑ ∫ ≤ ≥ · Hebrew שלום";
+const KDP_UNICODE_CODE_FIXTURE = "ɛ ɔ α β ∑ ∫ ≤ ≥";
+
+async function renderKdpInteriorForTest(content: string) {
+  return await generateKDPPDF(
+    makeBook({ title: `KDP ${KDP_UNICODE_PRINT_FIXTURE}` }),
+    [{ chapter_number: 1, title: `Chapter ${KDP_UNICODE_PRINT_FIXTURE}`, content }],
+    `Author ${KDP_UNICODE_PRINT_FIXTURE}`,
+    "TEST-KDP-0001",
+    false,
+    2026,
+    null,
+    false,
+    "APA",
+    [],
+    { width: 432, height: 648, name: '6" × 9"' },
+    false,
+    ctx,
+  );
+}
+
+Deno.test("KDP interior PDF: preserves required Unicode fixture and Hebrew", async () => {
+  const bytes = await renderKdpInteriorForTest([
+    KDP_UNICODE_PRINT_FIXTURE,
+    "",
+    `**Bold ${KDP_UNICODE_PRINT_FIXTURE}** and *italic ${KDP_UNICODE_PRINT_FIXTURE}*.`,
+    "",
+    "```text",
+    KDP_UNICODE_CODE_FIXTURE,
+    "```",
+  ].join("\n"));
+  assertValidPDF(bytes, 5_000);
+});
+
+Deno.test("KDP interior PDF: unsupported glyph fails loudly with exact codepoint", async () => {
+  let caught: unknown = null;
+  try {
+    await renderKdpInteriorForTest("This unsupported glyph must not disappear: 漢");
+  } catch (error) {
+    caught = error;
+  }
+  assert(caught instanceof Error, "unsupported KDP glyph should reject the PDF export");
+  assertEquals((caught as Error & { code?: string }).code, "PDF_UNSUPPORTED_GLYPH");
+  assert(caught.message.includes("U+6F22"), `expected U+6F22 in error, got: ${caught.message}`);
 });
 
 // =====================================================================
@@ -619,4 +703,175 @@ Deno.test("canonical EPUB: zip contains OPF + nav + chapter files", async () => 
   assert(names.includes("OEBPS/title.xhtml"), "missing title.xhtml");
   assert(names.includes("OEBPS/about-author.xhtml"), "missing about-author.xhtml");
   assert(names.includes("OEBPS/style.css"), "missing style.css");
+});
+// Unicode contracts exercise the same exported functions used by the handler,
+// including the legacy fallback and direct KDP paths.
+import { PDFDocument, PDFDict, PDFName, PDFRawStream, PDFFont, PDFArray, decodePDFRawStream } from "https://esm.sh/pdf-lib@1.17.1";
+import { UnsupportedPdfGlyphError } from "../_shared/pdf-unicode.ts";
+
+const unicodeFixture = "ɛ ɔ α β ∑ ∫ ≤ ≥ — שלום";
+const pdfPaths = ["canonical", "legacy", "kdp"] as const;
+
+async function renderUnicodePath(path: typeof pdfPaths[number], content: string, title = unicodeFixture) {
+  const args: Parameters<typeof generatePDF> = [makeBook({ title }), [{ chapter_number: 1, title: "Unicode chapter", content }],
+    "Ɔsɛi", "TEST-ID-0001", false, 2026, null, false, "APA", [], ctx];
+  if (path === "canonical") return generateCanonicalPDF(...args);
+  if (path === "legacy") return generatePDF(...args);
+  return generateKDPPDF(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9],
+    { width: 432, height: 648, name: "6x9" }, false, ctx);
+}
+
+async function assertEmbeddedFonts(bytes: Uint8Array, expectedWidth: number, expectedHeight: number) {
+  const pdf = await PDFDocument.load(bytes);
+  for (const page of pdf.getPages()) {
+    assertEquals(page.getWidth(), expectedWidth);
+    assertEquals(page.getHeight(), expectedHeight);
+  }
+  let descriptors = 0;
+  let unicodeMaps = 0;
+  for (const [, object] of pdf.context.enumerateIndirectObjects()) {
+    if (!(object instanceof PDFDict)) continue;
+    if (object.get(PDFName.of("Type"))?.toString() === "/FontDescriptor") {
+      descriptors++;
+      const stream = pdf.context.lookup(object.get(PDFName.of("FontFile2")));
+      assert(stream instanceof PDFRawStream && stream.getContents().length > 100,
+        "every font descriptor must contain an embedded TrueType program");
+    }
+    if (object.get(PDFName.of("Subtype"))?.toString() === "/Type0") {
+      unicodeMaps++;
+      assert(pdf.context.lookup(object.get(PDFName.of("ToUnicode"))) instanceof PDFRawStream,
+        "Unicode fonts must carry a ToUnicode mapping");
+    }
+    assert(object.get(PDFName.of("Subtype"))?.toString() !== "/Type1", "standard unembedded fonts are forbidden");
+  }
+  assertEquals(descriptors, 5, "regular/bold/italic/bold-italic/mono must all be embedded");
+  assertEquals(unicodeMaps, 5);
+}
+
+for (const path of pdfPaths) {
+  Deno.test(`${path} PDF: required Unicode and all interior font styles are embedded`, async () => {
+    const bytes = await renderUnicodePath(path, [
+      unicodeFixture, "", "**Bold ɛ ɔ α β ∑ ∫ ≤ ≥**", "", "*Italic ɛ ɔ α β ∑ ∫ ≤ ≥*",
+      "", "***Both ɛ ɔ α β ∑ ∫ ≤ ≥***", "", "```text", "ɛ ɔ α β ∑ ∫ ≤ ≥", "```",
+      "", "| Letter | Symbol |", "| --- | --- |", "| ɛ | ∑ |", "| ɔ | ∫ |",
+    ].join("\n"));
+    assertValidPDF(bytes);
+    await assertEmbeddedFonts(bytes, path === "kdp" ? 432 : 612, path === "kdp" ? 648 : 792);
+  });
+
+  for (const [label, content] of [
+    ["paragraph", "Unsupported 漢 glyph."],
+    ["styled paragraph", "**Unsupported 漢 glyph.**"],
+    ["code", "```text\nUnsupported 漢\n```"],
+    ["table", "| Name |\n| --- |\n| 漢 |"],
+    ["caption", "![Unsupported 漢 caption](https://example.invalid/image.png)"],
+  ]) {
+    Deno.test(`${path} PDF: ${label} cannot hide unsupported U+6F22`, async () => {
+      let caught: unknown;
+      try { await renderUnicodePath(path, content, "Ordinary title"); }
+      catch (error) { caught = error; }
+      assert(caught instanceof UnsupportedPdfGlyphError);
+      assertEquals(caught.code, "PDF_UNSUPPORTED_GLYPH");
+      assert(caught.glyphs.some((glyph) => glyph.codePoint === 0x6F22));
+      assert(caught.message.includes("U+6F22"));
+    });
+  }
+}
+
+// Existing table capacities must reject content, never publish a truncated PDF.
+import { PdfTableLayoutError, assertPdfTableGeometryFits } from "../_shared/pdf-table-layout.ts";
+for (const path of pdfPaths) {
+  for (const [label, content] of [
+    ["long cell", `| Cell | Label |\n| --- | --- |\n| ${"word ".repeat(101)}ɛ ɔ α β ∑ ∫ ≤ ≥ שלום | Value |`],
+    ["long header", `| ${"word ".repeat(29)}ɛ | Label |\n| --- | --- |\n| Value | Value |`],
+    ["wrapped header", `| ${"word ".repeat(21)} | B | C | D | E |\n| --- | --- | --- | --- | --- |\n| Value | ɛ | ɔ | α | β |`],
+    ["extra columns", `| ${Array.from({ length: 7 }, (_, i) => `Column ${i}`).join(" | ")} |\n| ${Array(7).fill("---").join(" | ")} |\n| ${Array(7).fill("ɛ").join(" | ")} |`],
+  ]) {
+    Deno.test(`${path} PDF: ${label} rejects silent table truncation`, async () => {
+      let caught: unknown;
+      try { await renderUnicodePath(path, content, "Table preservation"); }
+      catch (error) { caught = error; }
+      assert(caught instanceof PdfTableLayoutError, `${path} ${label}: expected table layout error, got ${String(caught)}`);
+      assertEquals(caught.code, "PDF_TABLE_LAYOUT_UNSUPPORTED");
+      assert(caught.context.includes("table"));
+    });
+  }
+}
+Deno.test("PDF table geometry: oversized row rejects clipping below the page", () => {
+  let caught: unknown;
+  try { assertPdfTableGeometryFits(30, [20, 501], 500, "PDF table"); }
+  catch (error) { caught = error; }
+  assert(caught instanceof PdfTableLayoutError);
+  assertEquals(caught.context, "PDF table row 2");
+  assertPdfTableGeometryFits(30, [470], 500, "PDF table");
+});
+
+for (const path of ["legacy", "kdp"] as const) {
+  Deno.test(`${path} PDF: custom table rejects a truncated Unicode cell`, async () => {
+    let caught: unknown;
+    try {
+      await renderUnicodePath(path, `TABLE: Preservation
+
+Column 1: Cell
+Column 2: Label
+
+Row 1:
+Cell: ${"word ".repeat(101)}ɛ ɔ שלום
+Label: Value`, "Table preservation");
+    } catch (error) { caught = error; }
+    assert(caught instanceof PdfTableLayoutError);
+    assertEquals(caught.code, "PDF_TABLE_LAYOUT_UNSUPPORTED");
+  });
+}
+
+for (const path of ["legacy", "kdp"] as const) {
+  Deno.test(`${path} PDF: loose table excess cells reach the fail-loud guard`, async () => {
+    let caught: unknown;
+    try {
+      await renderUnicodePath(path, "| Name | Value |\n| A | ɛ | ɔ |\n| B | β | ∑ |\n\nFollowing prose.", "Loose table");
+    } catch (error) { caught = error; }
+    assert(caught instanceof PdfTableLayoutError);
+    assert(caught.message.includes("cells without corresponding headers"));
+  });
+}
+
+Deno.test("KDP interior: repeated prose does not remeasure growing lines", async () => {
+  const content = "KDP measurement contract ɛ ɔ α β ∑ ∫ ≤ ≥. ".repeat(300);
+  const original = PDFFont.prototype.widthOfTextAtSize;
+  let measuredCharacters = 0;
+  PDFFont.prototype.widthOfTextAtSize = function(this: PDFFont, text: string, size: number): number {
+    measuredCharacters += text.length;
+    return original.call(this, text, size);
+  };
+  try {
+    const bytes = await renderUnicodePath("kdp", content, "Measurement contract");
+    assertValidPDF(bytes);
+    // Allow front matter and running headers, but reject repeatedly shaping
+    // the entire growing line for every word in a book-length paragraph.
+    assert(measuredCharacters < content.length * 2,
+      `font measurement processed ${measuredCharacters} characters for ${content.length} input characters`);
+  } finally {
+    PDFFont.prototype.widthOfTextAtSize = original;
+  }
+});
+
+Deno.test("KDP interior: final page count corrects an underestimated gutter", async () => {
+  // Short paragraphs consume pages without enough words to predict the gutter.
+  const content = Array(21_500).fill("Gutter marker.").join("\n\n");
+  const bytes = await renderUnicodePath("kdp", content, "Gutter contract");
+  const pdf = await PDFDocument.load(bytes);
+  assert(pdf.getPageCount() > 700, "fixture must reach the largest KDP gutter band");
+  const page = pdf.getPages()[6]; // Physical page 7: recto, inside margin on left.
+  const streams = page.node.Contents();
+  assert(streams instanceof PDFArray);
+  let operators = "";
+  for (let i = 0; i < streams.size(); i++) {
+    const stream = pdf.context.lookup(streams.get(i));
+    assert(stream instanceof PDFRawStream);
+    operators += new TextDecoder().decode(decodePDFRawStream(stream).decode());
+  }
+  assert(operators.includes("1 0 0 1 76 "), "final layout must use the larger 76pt gutter");
+  assert(!operators.includes("1 0 0 1 61 "), "estimated 61pt gutter is below the required 63pt");
+  assert(operators.includes(" 21 Tm"), "page-number glyphs need clearance above the bottom margin");
+  assert(operators.includes(" 622 Tm"), "running-header glyphs need clearance below the top margin");
 });
