@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- pdf-lib/fontkit monkey-patching crosses an intentionally dynamic runtime boundary. */
 import fontkit from "npm:@pdf-lib/fontkit@1.1.1";
-import bidiFactory from "npm:bidi-js@1.1.0";
+import bidiFactoryImport from "npm:bidi-js@1.1.0";
 import {
   assertPdfGlyphCoverage,
   containsRtlScript,
@@ -17,7 +17,22 @@ export interface UnicodePdfFonts {
   mono: any;
 }
 
-const bidi = bidiFactory();
+interface BidiApi {
+  getEmbeddingLevels(text: string): unknown;
+  getReorderedString(text: string, levels: unknown): string;
+}
+
+type BidiFactory = () => BidiApi;
+type BidiFactoryModule = BidiFactory | { default: BidiFactory };
+
+// bidi-js is CommonJS-shaped. Deno and Node/Bun can expose that package either
+// as the callable factory itself or as a module namespace with `default`.
+// Normalize that interop boundary once rather than weakening type checking.
+const bidiFactoryModule = bidiFactoryImport as unknown as BidiFactoryModule;
+const createBidi: BidiFactory = typeof bidiFactoryModule === "function"
+  ? bidiFactoryModule
+  : bidiFactoryModule.default;
+const bidi = createBidi();
 const GUARDED_PAGE = Symbol("scrolllibrary-unicode-pdf-page");
 
 let fontBytesPromise: Promise<{
