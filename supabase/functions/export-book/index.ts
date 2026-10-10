@@ -13,7 +13,7 @@ import { recordExportEvent } from "../_shared/export/audit.ts";
 import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";
 import { resolvePrepublicationIdentity } from "../_shared/publishingIdentity.ts";
 import { embedUnicodePdfInteriorFonts, installUnicodePdfTextGuard } from "../_shared/pdf-unicode-fonts.ts";
-import { assertPdfGlyphCoverage, normalizePdfText, UnsupportedPdfGlyphError, type PdfFontLike } from "../_shared/pdf-unicode.ts";
+import { assertPdfGlyphCoverage, normalizePdfText, UnsupportedPdfGlyphError, type PdfFontLike as PdfGlyphCoverageFont } from "../_shared/pdf-unicode.ts";
 
 // Disable zip.js web workers — Deno edge runtime + test runner leak worker
 // timers otherwise (no Worker pool to clean up).
@@ -1941,7 +1941,7 @@ serve(async (req) => {
 // on exception. Reuses cover/title/copyright/TOC/bibliography/about shells
 // from the legacy renderer's design language for output parity.
 // =====================================================================
-function assertPdfManuscriptCoverage(book: { title?: string; category?: string }, chapters: { chapter_number?: number; title?: string; content?: string }[], author: string, bibliography: string[], ctx: ExportContext, font: PdfFontLike): void {
+function assertPdfManuscriptCoverage(book: { title?: string; category?: string }, chapters: { chapter_number?: number; title?: string; content?: string }[], author: string, bibliography: string[], ctx: ExportContext, font: PdfGlyphCoverageFont): void {
   for (const [label, text] of [
     ["book title", book.title], ["book category", book.category], ["author", author],
     ["publisher", ctx.pub.publisher_name], ["imprint", ctx.pub.publisher_imprint],
