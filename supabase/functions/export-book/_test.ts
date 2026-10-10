@@ -706,7 +706,7 @@ Deno.test("canonical EPUB: zip contains OPF + nav + chapter files", async () => 
 });
 // Unicode contracts exercise the same exported functions used by the handler,
 // including the legacy fallback and direct KDP paths.
-import { PDFDocument, PDFDict, PDFName, PDFRawStream, PDFFont } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, PDFDict, PDFName, PDFRawStream, PDFFont, PDFArray, decodePDFRawStream } from "https://esm.sh/pdf-lib@1.17.1";
 import { UnsupportedPdfGlyphError } from "../_shared/pdf-unicode.ts";
 
 const unicodeFixture = "ɛ ɔ α β ∑ ∫ ≤ ≥ — שלום";
@@ -853,4 +853,25 @@ Deno.test("KDP interior: repeated prose does not remeasure growing lines", async
   } finally {
     PDFFont.prototype.widthOfTextAtSize = original;
   }
+});
+
+Deno.test("KDP interior: final page count corrects an underestimated gutter", async () => {
+  // Short paragraphs consume pages without enough words to predict the gutter.
+  const content = Array(21_500).fill("Gutter marker.").join("\n\n");
+  const bytes = await renderUnicodePath("kdp", content, "Gutter contract");
+  const pdf = await PDFDocument.load(bytes);
+  assert(pdf.getPageCount() > 700, "fixture must reach the largest KDP gutter band");
+  const page = pdf.getPages()[6]; // Physical page 7: recto, inside margin on left.
+  const streams = page.node.Contents();
+  assert(streams instanceof PDFArray);
+  let operators = "";
+  for (let i = 0; i < streams.size(); i++) {
+    const stream = pdf.context.lookup(streams.get(i));
+    assert(stream instanceof PDFRawStream);
+    operators += new TextDecoder().decode(decodePDFRawStream(stream).decode());
+  }
+  assert(operators.includes("1 0 0 1 76 "), "final layout must use the larger 76pt gutter");
+  assert(!operators.includes("1 0 0 1 61 "), "estimated 61pt gutter is below the required 63pt");
+  assert(operators.includes(" 21 Tm"), "page-number glyphs need clearance above the bottom margin");
+  assert(operators.includes(" 622 Tm"), "running-header glyphs need clearance below the top margin");
 });
