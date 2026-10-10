@@ -7,7 +7,7 @@
  * Run: deno test --allow-net --allow-env --allow-read supabase/functions/export-book/_test.ts
  */
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { generateCanonicalPDF, generateKDPPDF } from "./index.ts";
+import { generateCanonicalPDF, generatePDF, generateKDPPDF } from "./index.ts";
 
 const PDF_MAGIC = "%PDF-";
 const MIN_PDF_BYTES = 2000; // cover + title + copyright + 1 chapter page is well above this
@@ -704,3 +704,76 @@ Deno.test("canonical EPUB: zip contains OPF + nav + chapter files", async () => 
   assert(names.includes("OEBPS/about-author.xhtml"), "missing about-author.xhtml");
   assert(names.includes("OEBPS/style.css"), "missing style.css");
 });
+// Unicode contracts exercise the same exported functions used by the handler,
+// including the legacy fallback and direct KDP paths.
+import { PDFDocument, PDFDict, PDFName, PDFRawStream } from "https://esm.sh/pdf-lib@1.17.1";
+import { UnsupportedPdfGlyphError } from "../_shared/pdf-unicode.ts";
+
+const unicodeFixture = "ɛ ɔ α β ∑ ∫ ≤ ≥ — שלום";
+const pdfPaths = ["canonical", "legacy", "kdp"] as const;
+
+async function renderUnicodePath(path: typeof pdfPaths[number], content: string, title = unicodeFixture) {
+  const args: Parameters<typeof generatePDF> = [makeBook({ title }), [{ chapter_number: 1, title: "Unicode chapter", content }],
+    "Ɔsɛi", "TEST-ID-0001", false, 2026, null, false, "APA", [], ctx];
+  if (path === "canonical") return generateCanonicalPDF(...args);
+  if (path === "legacy") return generatePDF(...args);
+  return generateKDPPDF(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9],
+    { width: 432, height: 648, name: "6x9" }, false, ctx);
+}
+
+async function assertEmbeddedFonts(bytes: Uint8Array, expectedWidth: number, expectedHeight: number) {
+  const pdf = await PDFDocument.load(bytes);
+  for (const page of pdf.getPages()) {
+    assertEquals(page.getWidth(), expectedWidth);
+    assertEquals(page.getHeight(), expectedHeight);
+  }
+  let descriptors = 0;
+  let unicodeMaps = 0;
+  for (const [, object] of pdf.context.enumerateIndirectObjects()) {
+    if (!(object instanceof PDFDict)) continue;
+    if (object.get(PDFName.of("Type"))?.toString() === "/FontDescriptor") {
+      descriptors++;
+      const stream = pdf.context.lookup(object.get(PDFName.of("FontFile2")));
+      assert(stream instanceof PDFRawStream && stream.getContents().length > 100,
+        "every font descriptor must contain an embedded TrueType program");
+    }
+    if (object.get(PDFName.of("Subtype"))?.toString() === "/Type0") {
+      unicodeMaps++;
+      assert(pdf.context.lookup(object.get(PDFName.of("ToUnicode"))) instanceof PDFRawStream,
+        "Unicode fonts must carry a ToUnicode mapping");
+    }
+    assert(object.get(PDFName.of("Subtype"))?.toString() !== "/Type1", "standard unembedded fonts are forbidden");
+  }
+  assertEquals(descriptors, 5, "regular/bold/italic/bold-italic/mono must all be embedded");
+  assertEquals(unicodeMaps, 5);
+}
+
+for (const path of pdfPaths) {
+  Deno.test(`${path} PDF: required Unicode and all interior font styles are embedded`, async () => {
+    const bytes = await renderUnicodePath(path, [
+      unicodeFixture, "", "**Bold ɛ ɔ α β ∑ ∫ ≤ ≥**", "", "*Italic ɛ ɔ α β ∑ ∫ ≤ ≥*",
+      "", "***Both ɛ ɔ α β ∑ ∫ ≤ ≥***", "", "```text", "ɛ ɔ α β ∑ ∫ ≤ ≥", "```",
+      "", "| Letter | Symbol |", "| --- | --- |", "| ɛ | ∑ |", "| ɔ | ∫ |",
+    ].join("\n"));
+    assertValidPDF(bytes);
+    await assertEmbeddedFonts(bytes, path === "kdp" ? 432 : 612, path === "kdp" ? 648 : 792);
+  });
+
+  for (const [label, content] of [
+    ["paragraph", "Unsupported 漢 glyph."],
+    ["styled paragraph", "**Unsupported 漢 glyph.**"],
+    ["code", "```text\nUnsupported 漢\n```"],
+    ["table", "| Name |\n| --- |\n| 漢 |"],
+    ["caption", "![Unsupported 漢 caption](https://example.invalid/image.png)"],
+  ]) {
+    Deno.test(`${path} PDF: ${label} cannot hide unsupported U+6F22`, async () => {
+      let caught: unknown;
+      try { await renderUnicodePath(path, content, "Ordinary title"); }
+      catch (error) { caught = error; }
+      assert(caught instanceof UnsupportedPdfGlyphError);
+      assertEquals(caught.code, "PDF_UNSUPPORTED_GLYPH");
+      assert(caught.glyphs.some((glyph) => glyph.codePoint === 0x6F22));
+      assert(caught.message.includes("U+6F22"));
+    });
+  }
+}

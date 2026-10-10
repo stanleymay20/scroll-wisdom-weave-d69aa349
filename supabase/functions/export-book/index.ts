@@ -13,7 +13,7 @@ import { recordExportEvent } from "../_shared/export/audit.ts";
 import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";
 import { resolvePrepublicationIdentity } from "../_shared/publishingIdentity.ts";
 import { embedUnicodePdfInteriorFonts, installUnicodePdfTextGuard } from "../_shared/pdf-unicode-fonts.ts";
-import { assertPdfGlyphCoverage, normalizePdfText } from "../_shared/pdf-unicode.ts";
+import { assertPdfGlyphCoverage, normalizePdfText, UnsupportedPdfGlyphError } from "../_shared/pdf-unicode.ts";
 
 // Disable zip.js web workers — Deno edge runtime + test runner leak worker
 // timers otherwise (no Worker pool to clean up).
@@ -1757,6 +1757,7 @@ serve(async (req) => {
             canonicalFallbackUsed = false;
             console.log("[EXPORT] canonical PDF render succeeded");
           } catch (e) {
+            if (e instanceof UnsupportedPdfGlyphError) throw e;
             canonicalFallbackUsed = true;
             console.warn("[EXPORT] canonical PDF render failed, falling back to legacy:", e);
             pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
@@ -1926,7 +1927,9 @@ serve(async (req) => {
   } catch (error) {
     console.error("[EXPORT] Error:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify(error instanceof UnsupportedPdfGlyphError
+        ? { error: error.message, code: error.code, glyphs: error.glyphs, context: error.context }
+        : { error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -1938,6 +1941,20 @@ serve(async (req) => {
 // on exception. Reuses cover/title/copyright/TOC/bibliography/about shells
 // from the legacy renderer's design language for output parity.
 // =====================================================================
+function assertPdfManuscriptCoverage(book: any, chapters: any[], author: string, bibliography: string[], ctx: ExportContext, font: any): void {
+  for (const [label, text] of [
+    ["book title", book.title], ["book category", book.category], ["author", author],
+    ["publisher", ctx.pub.publisher_name], ["imprint", ctx.pub.publisher_imprint],
+  ]) assertPdfGlyphCoverage(String(text ?? ""), font, String(label));
+  for (const chapter of chapters || []) {
+    assertPdfGlyphCoverage(chapter.title || "", font, `chapter ${chapter.chapter_number} title`);
+    // Validate before parsing, clipping captions/tables, or legacy fallback can
+    // hide an unsupported character in a source span that is not drawn.
+    assertPdfGlyphCoverage(chapter.content || "", font, `chapter ${chapter.chapter_number} source`);
+  }
+  for (const ref of bibliography) assertPdfGlyphCoverage(ref, font, "bibliography");
+}
+
 export async function generateCanonicalPDF(
   book: any,
   chapters: any[],
@@ -1962,6 +1979,7 @@ export async function generateCanonicalPDF(
   const pdfDoc = await PDFDocument.create();
   installUnicodePdfTextGuard(pdfDoc);
   const unicodeFonts = await embedUnicodePdfInteriorFonts(pdfDoc);
+  assertPdfManuscriptCoverage(book, chapters, author, bibliography, ctx, unicodeFonts.regular);
   const timesRoman = unicodeFonts.regular;
   const timesRomanBold = unicodeFonts.bold;
   const timesRomanItalic = unicodeFonts.italic;
@@ -2501,7 +2519,7 @@ export async function generateCanonicalPDF(
 
 // ===== PDF Generation with Cover Page, TOC, and References =====
 
-async function generatePDF(
+export async function generatePDF(
   book: any, 
   chapters: any[], 
   author: string, 
@@ -2517,6 +2535,7 @@ async function generatePDF(
   const pdfDoc = await PDFDocument.create();
   installUnicodePdfTextGuard(pdfDoc);
   const unicodeFonts = await embedUnicodePdfInteriorFonts(pdfDoc);
+  assertPdfManuscriptCoverage(book, chapters, author, bibliography, ctx, unicodeFonts.regular);
   const timesRoman = unicodeFonts.regular;
   const timesRomanBold = unicodeFonts.bold;
   const timesRomanItalic = unicodeFonts.italic;
@@ -3886,6 +3905,7 @@ export async function generateKDPPDF(
   const pdfDoc = await PDFDocument.create();
   installUnicodePdfTextGuard(pdfDoc);
   const unicodeFonts = await embedUnicodePdfInteriorFonts(pdfDoc);
+  assertPdfManuscriptCoverage(book, chapters, author, bibliography, ctx, unicodeFonts.regular);
   const timesRoman = unicodeFonts.regular;
   const timesRomanBold = unicodeFonts.bold;
   const timesRomanItalic = unicodeFonts.italic;
