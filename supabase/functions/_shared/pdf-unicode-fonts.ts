@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- pdf-lib/fontkit monkey-patching crosses an intentionally dynamic runtime boundary. */
 import fontkit from "npm:@pdf-lib/fontkit@1.1.1";
 import bidiFactory from "npm:bidi-js@1.1.0";
 import dejavuPackage from "npm:dejavu-fonts-ttf@2.37.3/package.json" with { type: "json" };
