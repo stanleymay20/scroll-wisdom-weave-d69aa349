@@ -1,0 +1,47 @@
+name: Unicode Interior Verify
+
+on:
+  push:
+    branches:
+      - fix/unicode-safe-pdf-interior
+    paths:
+      - .github/workflows/unicode-interior-verify.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/unicode-safe-pdf-interior
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: 2.9.6
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Pin static Unicode interior invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=supabase/functions/export-book/index.ts
+          test "$(grep -c 'embedUnicodePdfInteriorFonts(pdfDoc)' "$f")" -eq 3
+          test "$(grep -c 'installUnicodePdfTextGuard(pdfDoc)' "$f")" -eq 3
+          ! grep -q 'StandardFonts' "$f"
+          ! grep -q '_pdfCharMap' "$f"
+          grep -q 'return normalizePdfText(text);' "$f"
+          grep -q 'assertPdfGlyphCoverage' "$f"
+          test "$(wc -l < supabase/functions/_shared/fonts/SOURCE_SHA256SUMS.txt)" -eq 5
+      - name: Type-check Unicode publication graph
+        run: |
+          deno check supabase/functions/_shared/pdf-unicode-fonts.ts
+          deno check supabase/functions/export-book/index.ts
+      - name: Preserve KDP cover regressions
+        run: deno test supabase/functions/_shared/kdp-print-cover_test.ts
+      - name: Run export renderer regressions
+        run: deno test --allow-net supabase/functions/export-book/_test.ts
