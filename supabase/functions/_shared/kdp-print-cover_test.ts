@@ -7,6 +7,7 @@ import {
   getPdfPageCount,
   requireKdpPaperbackPageCount,
 } from "./kdp-print-cover.ts";
+import { UnsupportedPdfGlyphError } from "./pdf-unicode.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -14,6 +15,11 @@ function assert(condition: unknown, message: string): asserts condition {
 
 function approx(actual: number, expected: number, epsilon = 0.000001) {
   assert(Math.abs(actual - expected) <= epsilon, `expected ${expected}, got ${actual}`);
+}
+
+function fixtureCoverBytes(): Uint8Array {
+  const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=";
+  return Uint8Array.from(atob(pngBase64), (c) => c.charCodeAt(0));
 }
 
 Deno.test("KDP 6x9 white-paper geometry follows page-count spine formula", () => {
@@ -109,12 +115,8 @@ Deno.test("barcode zone stays on the lower back cover away from the spine fold",
 });
 
 Deno.test("print cover builder emits a one-page PDF with owned ISBN barcode", async () => {
-  // 1x1 PNG; sufficient for a structural renderer test. Production acquisition
-  // enforces real cover dimensions/quality upstream.
-  const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=";
-  const coverBytes = Uint8Array.from(atob(pngBase64), (c) => c.charCodeAt(0));
   const result = await buildKdpPrintCoverPdf({
-    frontCoverBytes: coverBytes,
+    frontCoverBytes: fixtureCoverBytes(),
     frontCoverMime: "image/png",
     title: "Publication Trust Test",
     authorName: "ScrollLibrary",
@@ -134,13 +136,53 @@ Deno.test("print cover builder emits a one-page PDF with owned ISBN barcode", as
   assert(result.barcodeMode === "owned_isbn", "wrong barcode mode");
 });
 
-Deno.test("KDP-assigned barcode mode never accepts a supplied ISBN", async () => {
-  const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=";
-  const coverBytes = Uint8Array.from(atob(pngBase64), (c) => c.charCodeAt(0));
+Deno.test("KDP cover preserves required Unicode fixture and Hebrew through embedded fonts", async () => {
+  const result = await buildKdpPrintCoverPdf({
+    frontCoverBytes: fixtureCoverBytes(),
+    frontCoverMime: "image/png",
+    title: "ɛ ɔ α β ∑ ∫ ≤ ≥ — שלום",
+    authorName: "Ɔsɛi — Αλφα",
+    backBlurb: "Unicode print fixture: ɛ ɔ α β ∑ ∫ ≤ ≥. Hebrew: שלום.",
+    publisherName: "ScrollLibrary Press",
+    imprintName: "Ɛdition α",
+    barcodeMode: "kdp_assigned",
+    pageCount: 220,
+    trimSize: "6x9",
+    paperType: "white",
+  });
+
+  assert(result.bytes.byteLength > 5_000, "embedded-font cover PDF unexpectedly small");
+  assert(await getPdfPageCount(result.bytes) === 1, "Unicode cover PDF must have exactly one page");
+  assert(result.spineTextRendered, "220-page Unicode fixture should exercise spine text");
+});
+
+Deno.test("KDP cover fails loudly with precise codepoint when a glyph is unsupported", async () => {
   let rejected = false;
   try {
     await buildKdpPrintCoverPdf({
-      frontCoverBytes: coverBytes,
+      frontCoverBytes: fixtureCoverBytes(),
+      frontCoverMime: "image/png",
+      title: "Unsupported 漢 glyph",
+      authorName: "ScrollLibrary",
+      barcodeMode: "kdp_assigned",
+      pageCount: 220,
+      trimSize: "6x9",
+      paperType: "white",
+    });
+  } catch (error) {
+    rejected = error instanceof UnsupportedPdfGlyphError
+      && error.code === "PDF_UNSUPPORTED_GLYPH"
+      && error.glyphs.some((glyph) => glyph.codePoint === 0x6F22)
+      && error.message.includes("U+6F22");
+  }
+  assert(rejected, "unsupported print glyph must fail loudly with its Unicode codepoint");
+});
+
+Deno.test("KDP-assigned barcode mode never accepts a supplied ISBN", async () => {
+  let rejected = false;
+  try {
+    await buildKdpPrintCoverPdf({
+      frontCoverBytes: fixtureCoverBytes(),
       frontCoverMime: "image/png",
       title: "No Synthetic ISBN",
       isbn13: "9780306406157",
