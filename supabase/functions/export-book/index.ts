@@ -206,7 +206,7 @@ function parseCustomTableFormat(text: string): { tables: ParsedTable[]; cleanedT
     
     if (headers.length > 0 && rows.length > 0) {
       tables.push({ name: tableName, headers, rows });
-      cleanedText = cleanedText.replace(fullMatch, `[CUSTOM_TABLE_${tables.length - 1}]`);
+      cleanedText = cleanedText.replace(fullMatch, `\n\n[CUSTOM_TABLE_${tables.length - 1}]\n\n`);
     }
   }
   
@@ -460,7 +460,7 @@ function processMarkdownContent(text: string): {
     
     if (headers.length > 0 && rows.length > 0) {
       tables.push({ name: tableName || 'Table', headers, rows });
-      return `[MD_TABLE_${tables.length - 1}]`;
+      return `\n\n[MD_TABLE_${tables.length - 1}]\n\n`;
     }
     return match;
   });
@@ -497,7 +497,7 @@ function processMarkdownContent(text: string): {
     }
     if (dataRows.length === 0) return match;
     tables.push({ name: 'Table', headers, rows: dataRows });
-    return `[MD_TABLE_${tables.length - 1}]\n`;
+    return `\n\n[MD_TABLE_${tables.length - 1}]\n\n`;
   });
 
 

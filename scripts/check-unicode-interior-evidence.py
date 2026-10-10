@@ -23,6 +23,21 @@ for name in ("canonical", "legacy", "kdp"):
             raise SystemExit(f"{name}: missing Unicode in {style}: {line!r}")
     if any(glyph not in text for glyph in "שלום"):
         raise SystemExit(f"{name}: Hebrew glyphs missing from extracted text")
+    # Check the entire known fixture, including prose adjoining a table. Font
+    # coverage alone cannot detect a parser dropping a supported text block.
+    body = "\n".join(line for line in text.splitlines()
+                     if "Ɔsɛi" not in line
+                     and line.strip() not in ("Languages and notation", "Pagination contract")
+                     and not re.fullmatch(r"\s*\d+\s*", line))
+    normalized = re.sub(r"\s+", " ", body)
+    quote = "A quoted passage with ɛ ɔ α β ∑ ∫ ≤ ≥."
+    if normalized.count(quote) != 1:
+        raise SystemExit(f"{name}: quoted passage after table is missing or duplicated")
+    if list(map(int, re.findall(r"Paragraph (\d+)\.", body))) != list(range(1, 31)):
+        raise SystemExit(f"{name}: pagination paragraphs are missing, reordered or duplicated")
+    prose = "This manuscript fixture exercises wrapping and page transitions with ɛ and ɔ."
+    if normalized.count(prose) != 360:
+        raise SystemExit(f"{name}: expected all 360 pagination-fixture sentences")
     (root / f"{name}-pdfinfo.txt").write_text(subprocess.check_output(["pdfinfo", str(pdf)], text=True))
     subprocess.run(["pdftoppm", "-f", "5", "-l", "8", "-r", "90", "-png", str(pdf), str(root / name)], check=True)
 print(json.dumps({"unicode_interior_evidence": "pass", "qualification": "integration-only"}))
