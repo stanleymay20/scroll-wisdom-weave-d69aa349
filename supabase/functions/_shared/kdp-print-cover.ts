@@ -1,5 +1,7 @@
-import { PDFDocument, StandardFonts, degrees, rgb } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, degrees, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { isValidIsbn13, normalizeIsbn13 } from "./isbn.ts";
+import { embedUnicodePdfFonts, installUnicodePdfTextGuard } from "./pdf-unicode-fonts.ts";
+import { assertPdfGlyphCoverage, normalizePdfText } from "./pdf-unicode.ts";
 
 export type KdpPaperType = "white" | "cream" | "groundwood" | "standard_color" | "premium_color";
 export type KdpTrimSize = "5x8" | "5.25x8" | "5.5x8.5" | "6x9" | "7x10" | "8.5x11";
@@ -201,16 +203,22 @@ export function barcodeBoxPosition(geometry: KdpCoverGeometry): { xIn: number; y
   return { xIn, yIn, widthIn: KDP_BARCODE_BOX_WIDTH_IN, heightIn: KDP_BARCODE_BOX_HEIGHT_IN };
 }
 
+function truncateCodePoints(text: string, maxChars: number): string {
+  const chars = Array.from(text);
+  if (chars.length <= maxChars) return text;
+  return `${chars.slice(0, Math.max(1, maxChars - 1)).join("")}…`;
+}
+
 function wrapText(text: string, maxChars: number): string[] {
-  const words = (text || "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const words = normalizePdfText(text || "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
   const lines: string[] = [];
   let current = "";
   for (const word of words) {
     const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length <= maxChars) current = candidate;
+    if (Array.from(candidate).length <= maxChars) current = candidate;
     else {
       if (current) lines.push(current);
-      current = word.length <= maxChars ? word : `${word.slice(0, Math.max(1, maxChars - 1))}…`;
+      current = truncateCodePoints(word, maxChars);
     }
   }
   if (current) lines.push(current);
@@ -278,9 +286,13 @@ export async function buildKdpPrintCoverPdf(input: KdpPrintCoverInput): Promise<
   if (input.barcodeMode === "kdp_assigned" && isbn) throw new Error("KDP_ASSIGNED_BARCODE_MUST_NOT_CARRY_ISBN");
 
   const pdf = await PDFDocument.create();
+  // Install the guard before any page exists so every subsequent drawText call
+  // validates glyph coverage and applies RTL ordering at the final draw boundary.
+  installUnicodePdfTextGuard(pdf);
+  const unicodeFonts = await embedUnicodePdfFonts(pdf);
   const page = pdf.addPage([geometry.totalWidthIn * PT_PER_IN, geometry.totalHeightIn * PT_PER_IN]);
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const regular = unicodeFonts.sans;
+  const bold = unicodeFonts.sansBold;
   const frontImage = await embedFrontImage(pdf, input.frontCoverBytes, input.frontCoverMime);
 
   // Draw the front artwork first using a cover-fit. Any leftward overflow is
@@ -328,14 +340,14 @@ export async function buildKdpPrintCoverPdf(input: KdpPrintCoverInput): Promise<
     textY -= 20;
   }
   if (input.authorName?.trim()) {
-    page.drawText(input.authorName.trim(), { x: safeLeft, y: textY - 2, size: 10, font: regular, color: rgb(0.25, 0.25, 0.25) });
+    page.drawText(normalizePdfText(input.authorName.trim()), { x: safeLeft, y: textY - 2, size: 10, font: regular, color: rgb(0.25, 0.25, 0.25) });
     textY -= 26;
   }
 
   const barcodeBox = barcodeBoxPosition(geometry);
   const barcodeTopPt = (barcodeBox.yIn + barcodeBox.heightIn) * PT_PER_IN;
   const blurbFloor = barcodeTopPt + 22;
-  const blurb = (input.backBlurb || "").trim();
+  const blurb = normalizePdfText((input.backBlurb || "").trim());
   if (blurb) {
     const blurbLines = wrapText(blurb, Math.max(30, Math.floor(textWidth / 5.4)));
     const maxLines = Math.max(0, Math.floor((textY - blurbFloor) / 11));
@@ -345,9 +357,9 @@ export async function buildKdpPrintCoverPdf(input: KdpPrintCoverInput): Promise<
     }
   }
 
-  const imprintLine = [input.imprintName, input.publisherName].filter(Boolean).join(" · ");
+  const imprintLine = normalizePdfText([input.imprintName, input.publisherName].filter(Boolean).join(" · "));
   if (imprintLine) {
-    page.drawText(imprintLine.slice(0, 100), {
+    page.drawText(truncateCodePoints(imprintLine, 100), {
       x: safeLeft,
       y: (KDP_BLEED_IN + 0.28) * PT_PER_IN,
       size: 7.5,
@@ -376,10 +388,14 @@ export async function buildKdpPrintCoverPdf(input: KdpPrintCoverInput): Promise<
   if (geometry.spineTextAllowed) {
     const usableSpinePt = (geometry.spineWidthIn - 2 * KDP_SPINE_TEXT_FOLD_CLEARANCE_IN) * PT_PER_IN;
     const spineFontSize = Math.min(12, Math.max(7, usableSpinePt));
-    const spineLabel = [input.title.trim(), input.authorName?.trim()].filter(Boolean).join(" — ");
+    const spineLabel = normalizePdfText([input.title.trim(), input.authorName?.trim()].filter(Boolean).join(" — "));
     const maxTextWidth = (geometry.trimHeightIn - 0.75) * PT_PER_IN;
+    assertPdfGlyphCoverage(spineLabel, bold, "KDP spine label");
     let label = spineLabel;
-    while (label.length > 8 && bold.widthOfTextAtSize(label, spineFontSize) > maxTextWidth) label = `${label.slice(0, -2)}…`;
+    while (Array.from(label).length > 8 && bold.widthOfTextAtSize(label, spineFontSize) > maxTextWidth) {
+      label = truncateCodePoints(label, Array.from(label).length - 1);
+    }
+    assertPdfGlyphCoverage(label, bold, "KDP spine label");
     const textWidthPt = bold.widthOfTextAtSize(label, spineFontSize);
     const spineCenterX = ((geometry.spineLeftIn + geometry.spineRightIn) / 2) * PT_PER_IN;
     page.drawText(label, {
