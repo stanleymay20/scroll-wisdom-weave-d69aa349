@@ -23,7 +23,11 @@ const chapters = [{
     "***Both: ɛ ɔ α β ∑ ∫ ≤ ≥.***", "",
     "```text", "Mono: ɛ ɔ α β ∑ ∫ ≤ ≥", "```", "",
     "| Letter | Symbol |", "| --- | --- |", "| ɛ | ∑ |", "| ɔ | ∫ |", "",
-    "> A quoted passage with ɛ ɔ α β ∑ ∫ ≤ ≥.",
+    "> A quoted passage with ɛ ɔ α β ∑ ∫ ≤ ≥.", "",
+    "| LeftSlot | MiddleSlot | RightSlot |", "| --- | --- | --- |",
+    "| LeftMarker | | RightMarker |", "| | MiddleMarker | |", "",
+    "| HeadLeft | | HeadRight |", "| --- | --- | --- |",
+    "| BlankHeaderLeft | | BlankHeaderRight |",
   ].join("\n"),
 }, {
   chapter_number: 2, title: "Pagination contract",

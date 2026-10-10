@@ -777,3 +777,60 @@ for (const path of pdfPaths) {
     });
   }
 }
+
+// Existing table capacities must reject content, never publish a truncated PDF.
+import { PdfTableLayoutError, assertPdfTableGeometryFits } from "../_shared/pdf-table-layout.ts";
+for (const path of pdfPaths) {
+  for (const [label, content] of [
+    ["long cell", `| Cell | Label |\n| --- | --- |\n| ${"word ".repeat(101)}ɛ ɔ α β ∑ ∫ ≤ ≥ שלום | Value |`],
+    ["long header", `| ${"word ".repeat(29)}ɛ | Label |\n| --- | --- |\n| Value | Value |`],
+    ["wrapped header", `| ${"word ".repeat(21)} | B | C | D | E |\n| --- | --- | --- | --- | --- |\n| Value | ɛ | ɔ | α | β |`],
+    ["extra columns", `| ${Array.from({ length: 7 }, (_, i) => `Column ${i}`).join(" | ")} |\n| ${Array(7).fill("---").join(" | ")} |\n| ${Array(7).fill("ɛ").join(" | ")} |`],
+  ]) {
+    Deno.test(`${path} PDF: ${label} rejects silent table truncation`, async () => {
+      let caught: unknown;
+      try { await renderUnicodePath(path, content, "Table preservation"); }
+      catch (error) { caught = error; }
+      assert(caught instanceof PdfTableLayoutError, `${path} ${label}: expected table layout error, got ${String(caught)}`);
+      assertEquals(caught.code, "PDF_TABLE_LAYOUT_UNSUPPORTED");
+      assert(caught.context.includes("table"));
+    });
+  }
+}
+Deno.test("PDF table geometry: oversized row rejects clipping below the page", () => {
+  let caught: unknown;
+  try { assertPdfTableGeometryFits(30, [20, 501], 500, "PDF table"); }
+  catch (error) { caught = error; }
+  assert(caught instanceof PdfTableLayoutError);
+  assertEquals(caught.context, "PDF table row 2");
+  assertPdfTableGeometryFits(30, [470], 500, "PDF table");
+});
+
+for (const path of ["legacy", "kdp"] as const) {
+  Deno.test(`${path} PDF: custom table rejects a truncated Unicode cell`, async () => {
+    let caught: unknown;
+    try {
+      await renderUnicodePath(path, `TABLE: Preservation
+
+Column 1: Cell
+Column 2: Label
+
+Row 1:
+Cell: ${"word ".repeat(101)}ɛ ɔ שלום
+Label: Value`, "Table preservation");
+    } catch (error) { caught = error; }
+    assert(caught instanceof PdfTableLayoutError);
+    assertEquals(caught.code, "PDF_TABLE_LAYOUT_UNSUPPORTED");
+  });
+}
+
+for (const path of ["legacy", "kdp"] as const) {
+  Deno.test(`${path} PDF: loose table excess cells reach the fail-loud guard`, async () => {
+    let caught: unknown;
+    try {
+      await renderUnicodePath(path, "| Name | Value |\n| A | ɛ | ɔ |\n| B | β | ∑ |\n\nFollowing prose.", "Loose table");
+    } catch (error) { caught = error; }
+    assert(caught instanceof PdfTableLayoutError);
+    assert(caught.message.includes("cells without corresponding headers"));
+  });
+}
