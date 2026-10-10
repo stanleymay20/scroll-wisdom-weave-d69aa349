@@ -2424,7 +2424,18 @@ export async function generateCanonicalPDF(
           }
         }
       } catch (blockErr) {
-        // Single-block failure should NOT poison the whole render — log and move on
+        // Unicode fidelity is a publication-integrity boundary, not a
+        // recoverable block-level rendering error. Never log-and-continue after
+        // the shared glyph guard has rejected content.
+        if (
+          blockErr &&
+          typeof blockErr === "object" &&
+          "code" in blockErr &&
+          (blockErr as { code?: unknown }).code === "PDF_UNSUPPORTED_GLYPH"
+        ) {
+          throw blockErr;
+        }
+        // Other isolated block failures retain the existing best-effort policy.
         console.warn("[CANONICAL_PDF] block render error", block.kind, blockErr);
         y -= 4;
       }
