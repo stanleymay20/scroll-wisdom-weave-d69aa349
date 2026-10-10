@@ -13,6 +13,7 @@ export interface UnicodePdfFonts {
   italic: any;
   boldItalic: any;
   sans: any;
+  sansBold: any;
   mono: any;
 }
 
@@ -96,8 +97,11 @@ export function installUnicodePdfTextGuard(pdfDoc: any): void {
 
 /**
  * Load redistribution-safe DejaVu 2.37 fonts from the pinned npm package and
- * embed subsets into the output PDF. The package is resolved from the Deno npm
- * cache/bundle; no runtime HTTP font request is made.
+ * embed subsets into the output PDF. DejaVu Sans is intentionally the primary
+ * family because the print blocker requires one embedded family that covers
+ * Akan Latin extensions, Greek, Hebrew and common mathematical symbols. The
+ * package is resolved from the Deno npm cache/bundle; no runtime HTTP font
+ * request is made.
  */
 export async function embedUnicodePdfFonts(pdfDoc: any): Promise<UnicodePdfFonts> {
   pdfDoc.registerFontkit(fontkit);
@@ -117,6 +121,7 @@ export async function embedUnicodePdfFonts(pdfDoc: any): Promise<UnicodePdfFonts
     italic,
     boldItalic,
     sans: regular,
+    sansBold: bold,
     mono,
   };
 }
