@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- pdf-lib/fontkit monkey-patching crosses an intentionally dynamic runtime boundary. */
-import fontkit from "npm:@pdf-lib/fontkit@1.1.1";
-import bidiFactory from "npm:bidi-js@1.1.0";
+import fontkit from "@pdf-lib/fontkit";
+import bidiFactory from "bidi-js";
 import {
   assertPdfGlyphCoverage,
   containsRtlScript,
@@ -29,10 +29,9 @@ let fontBytesPromise: Promise<{
 }> | null = null;
 
 async function readDejaVuFont(fileName: string): Promise<Uint8Array> {
-  // Resolve the already lock-pinned package directly through Deno's npm cache.
-  // This does not require a workspace node_modules directory and does not fetch
-  // a font over HTTP at render time.
-  const assetUrl = import.meta.resolve(`npm:dejavu-fonts-ttf@2.37.3/ttf/${fileName}`);
+  // Resolve the lock-pinned package directly through the declared Deno import
+  // map. This keeps nodeModulesDir="none" and avoids runtime HTTP font fetches.
+  const assetUrl = import.meta.resolve(`dejavu-fonts-ttf/ttf/${fileName}`);
   return await Deno.readFile(new URL(assetUrl));
 }
 
@@ -99,7 +98,7 @@ export function installUnicodePdfTextGuard(pdfDoc: any): void {
  * embed subsets into the output PDF. DejaVu Sans is intentionally the primary
  * family because the print blocker requires one embedded family that covers
  * Akan Latin extensions, Greek, Hebrew and common mathematical symbols. The
- * package is resolved from the Deno npm cache; no runtime HTTP font request is
+ * package is resolved from Deno's npm cache; no runtime HTTP font request is
  * made by the renderer.
  */
 export async function embedUnicodePdfFonts(pdfDoc: any): Promise<UnicodePdfFonts> {
