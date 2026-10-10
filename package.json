@@ -74,7 +74,7 @@
     "@radix-ui/react-visually-hidden": "^1.2.11",
     "@sentry/deno": "10.73.0",
     "@sentry/react": "10.74.0",
-    "@supabase/supabase-js": "^2.116.0",
+    "@supabase/supabase-js": "^2.117.2",
     "@tanstack/react-query": "^5.103.1",
     "@types/dompurify": "^3.2.0",
     "bidi-js": "1.1.0",
