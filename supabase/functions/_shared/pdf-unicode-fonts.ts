@@ -2,6 +2,10 @@
 import fontkit from "npm:@pdf-lib/fontkit@1.1.1";
 import bidiFactoryImport from "npm:bidi-js@1.1.0";
 import {
+  DEJAVU_SANS_BOLD_GZIP_BASE64,
+  DEJAVU_SANS_REGULAR_GZIP_BASE64,
+} from "./pdf-unicode-font-data.ts";
+import {
   assertPdfGlyphCoverage,
   containsRtlScript,
   normalizePdfText,
@@ -10,11 +14,8 @@ import {
 export interface UnicodePdfFonts {
   regular: any;
   bold: any;
-  italic: any;
-  boldItalic: any;
   sans: any;
   sansBold: any;
-  mono: any;
 }
 
 interface BidiApi {
@@ -38,31 +39,34 @@ const GUARDED_PAGE = Symbol("scrolllibrary-unicode-pdf-page");
 let fontBytesPromise: Promise<{
   regular: Uint8Array;
   bold: Uint8Array;
-  italic: Uint8Array;
-  boldItalic: Uint8Array;
-  mono: Uint8Array;
 }> | null = null;
 
-async function readDejaVuFont(fileName: string): Promise<Uint8Array> {
-  // Resolve exact, lock-pinned npm assets directly. This keeps
-  // nodeModulesDir="none" and avoids runtime HTTP font fetches or a broader
-  // workspace import-map change.
-  const assetUrl = import.meta.resolve(`npm:dejavu-fonts-ttf@2.37.3/ttf/${fileName}`);
-  return await Deno.readFile(new URL(assetUrl));
+function decodeBase64(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function gunzipBase64(base64: string): Promise<Uint8Array> {
+  const compressed = decodeBase64(base64);
+  const decompressed = new Blob([compressed])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(decompressed).arrayBuffer());
 }
 
 async function loadFontBytes() {
   if (!fontBytesPromise) {
-    fontBytesPromise = (async () => {
-      const [regular, bold, italic, boldItalic, mono] = await Promise.all([
-        readDejaVuFont("DejaVuSans.ttf"),
-        readDejaVuFont("DejaVuSans-Bold.ttf"),
-        readDejaVuFont("DejaVuSans-Oblique.ttf"),
-        readDejaVuFont("DejaVuSans-BoldOblique.ttf"),
-        readDejaVuFont("DejaVuSansMono.ttf"),
-      ]);
-      return { regular, bold, italic, boldItalic, mono };
-    })();
+    // Font bytes are generated deterministically from DejaVu 2.37.3 and kept
+    // inside the TypeScript module graph. This deliberately avoids runtime
+    // filesystem permissions, external font downloads and deployment-specific
+    // static-file handling. Source hashes and the redistribution license live
+    // in `_shared/fonts/`.
+    fontBytesPromise = Promise.all([
+      gunzipBase64(DEJAVU_SANS_REGULAR_GZIP_BASE64),
+      gunzipBase64(DEJAVU_SANS_BOLD_GZIP_BASE64),
+    ]).then(([regular, bold]) => ({ regular, bold }));
   }
   return await fontBytesPromise;
 }
@@ -110,30 +114,24 @@ export function installUnicodePdfTextGuard(pdfDoc: any): void {
 }
 
 /**
- * Load redistribution-safe DejaVu 2.37 fonts from exact npm package versions
- * and embed subsets into the output PDF. DejaVu Sans is intentionally the
- * primary family because the print blocker requires one embedded family that
- * covers Akan Latin extensions, Greek, Hebrew and common mathematical symbols.
+ * Embed redistribution-safe DejaVu Sans subsets into the output PDF. The cover
+ * slice intentionally carries only regular and bold because those are the only
+ * styles the existing KDP cover renderer uses. Interior italic/mono fonts stay
+ * out of this PR until the interior renderer is separately qualified.
  */
 export async function embedUnicodePdfFonts(pdfDoc: any): Promise<UnicodePdfFonts> {
   pdfDoc.registerFontkit(fontkit);
   const bytes = await loadFontBytes();
 
-  const [regular, bold, italic, boldItalic, mono] = await Promise.all([
+  const [regular, bold] = await Promise.all([
     pdfDoc.embedFont(bytes.regular, { subset: true }),
     pdfDoc.embedFont(bytes.bold, { subset: true }),
-    pdfDoc.embedFont(bytes.italic, { subset: true }),
-    pdfDoc.embedFont(bytes.boldItalic, { subset: true }),
-    pdfDoc.embedFont(bytes.mono, { subset: true }),
   ]);
 
   return {
     regular,
     bold,
-    italic,
-    boldItalic,
     sans: regular,
     sansBold: bold,
-    mono,
   };
 }
