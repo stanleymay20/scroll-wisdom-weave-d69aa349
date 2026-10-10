@@ -33,7 +33,7 @@ interface PlanConfig {
 
 const plans: PlanConfig[] = [
   {
-    description: "Try the core creation and reading experience",
+    description: "Create, read and prove the core workflow",
     icon: BookOpen,
     tierKey: "free",
     features: [
@@ -42,11 +42,11 @@ const plans: PlanConfig[] = [
       "Up to 4,000 words / chapter",
       "5 narration minutes",
       "Reader, quizzes & certificates",
-      "15% marketplace fee when marketplace selling is available",
+      "10% marketplace fee when marketplace selling is available",
     ],
   },
   {
-    description: "For authors creating and exporting regularly",
+    description: "For authors, educators and experts publishing regularly",
     icon: Zap,
     tierKey: "student",
     features: [
@@ -55,11 +55,11 @@ const plans: PlanConfig[] = [
       "10 AI-generated visuals",
       "15 narration minutes",
       "PDF / EPUB / DOCX when export gate is open",
-      "10% marketplace fee when marketplace selling is available",
+      "7% marketplace fee when marketplace selling is available",
     ],
   },
   {
-    description: "For serious authors preparing work for publication",
+    description: "For professional publishing and knowledge businesses",
     icon: Sparkles,
     popular: true,
     tierKey: "premium",
@@ -230,7 +230,7 @@ export default function Pricing() {
     <div className="min-h-screen flex flex-col">
       <SEO
         title="Pricing | ScrollLibrary"
-        description="ScrollLibrary plans for authors, publishers and teams, with separate usage and publishing services so AI and ISBN economics stay transparent."
+        description="ScrollLibrary plans for creators, professional publishers and teams, with transparent usage, publishing and marketplace economics."
         canonical="/pricing"
       />
       <Navbar />
@@ -243,9 +243,8 @@ export default function Pricing() {
                 One plan ladder. Clear usage. Publishing only when you publish.
               </h1>
               <p className="text-muted-foreground text-lg max-w-3xl mx-auto">
-                Subscriptions cover software and bounded AI usage. ScrollLibrary Press publishing services,
-                marketplace fees, and extra AI usage are priced separately so heavy usage never hides inside an
-                “unlimited” promise.
+                Create, verify, publish and teach from one workspace. Subscriptions cover software and bounded AI usage;
+                publishing services, marketplace fees and extra compute stay separate so the economics remain understandable.
               </p>
               <div className="mt-6 inline-flex rounded-lg border bg-muted/30 p-1">
                 <Button
@@ -284,7 +283,7 @@ export default function Pricing() {
                   >
                     {plan.popular && (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-                        <Badge>Best for publishing</Badge>
+                        <Badge>Best for professional publishing</Badge>
                       </div>
                     )}
                     <Card className={`h-full ${plan.popular ? "border-primary/50 shadow-lg shadow-primary/10" : ""} ${isCurrent ? "ring-2 ring-primary/40" : ""}`}>
@@ -342,8 +341,27 @@ export default function Pricing() {
 
             <div className="mb-10 rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground max-w-4xl mx-auto">
               <p><strong className="text-foreground">How usage works:</strong> book projects are creation slots, while your monthly AI-word allowance is shared across the books you generate. A generated visual uses one visual request. Narration is metered in standard narration minutes.</p>
+              <p className="mt-2"><strong className="text-foreground">No surprise overages:</strong> when a bounded monthly allowance is exhausted, ScrollLibrary blocks the paid compute path until you deliberately upgrade or buy an eligible add-on.</p>
               <p className="mt-2">You retain ownership of what you create, subject to applicable law and any third-party/source rights described in the Terms. Commercial rights are not sold as a premium-plan privilege.</p>
             </div>
+
+            <section className="mb-14">
+              <Card className="border-primary/30 bg-primary/5">
+                <CardContent className="p-6 md:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+                  <div>
+                    <Badge variant="secondary" className="mb-3">Institution / Enterprise</Badge>
+                    <h2 className="text-2xl font-display font-bold">Verified knowledge infrastructure for organizations</h2>
+                    <p className="text-muted-foreground mt-2 max-w-3xl">
+                      Universities, publishers and companies can scope author seats, learner access, SSO, governed publishing,
+                      verification, mastery analytics, API access and support under a contract sized to the organization.
+                    </p>
+                  </div>
+                  <Button variant="outline" onClick={() => navigate("/contact")} className="shrink-0">
+                    Contact us
+                  </Button>
+                </CardContent>
+              </Card>
+            </section>
 
             {!FEATURES.enableSubscriptionCheckout && (
               <div id="billing" className="mb-14 rounded-2xl border bg-muted/30 p-6 md:p-8 text-center">
@@ -451,10 +469,11 @@ export default function Pricing() {
               <div className="text-center mb-6">
                 <Store className="h-7 w-7 mx-auto text-primary mb-2" />
                 <h2 className="text-3xl font-display font-bold">Marketplace fees</h2>
-                <p className="text-muted-foreground mt-2">
-                  These rates apply when marketplace selling is enabled. ScrollLibrary service fee only; payment processing,
-                  taxes, refunds and currency conversion are separate.
+                <p className="text-muted-foreground mt-2 max-w-3xl mx-auto">
+                  These rates apply only when ScrollLibrary facilitates the customer transaction. The percentage is the
+                  ScrollLibrary service fee; payment processing, taxes, refunds and currency conversion may be separate.
                 </p>
+                <p className="text-sm font-medium mt-3">No ScrollLibrary commission on external-channel royalties from KDP, Ingram, bookstores or other off-platform sales.</p>
                 {!FEATURES.enableMarketplace && <Badge variant="secondary" className="mt-3">Marketplace selling is not open yet</Badge>}
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
