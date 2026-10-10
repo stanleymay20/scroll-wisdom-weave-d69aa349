@@ -7,8 +7,13 @@ export interface UnsupportedPdfGlyph {
   character: string;
 }
 
-const NON_PRINTING_CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 const RTL_SCRIPT = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/u;
+
+function isPrintablePdfCodePoint(codePoint: number): boolean {
+  // Preserve TAB/LF/CR for layout code. Drop the remaining C0 controls and DEL.
+  if (codePoint === 0x09 || codePoint === 0x0A || codePoint === 0x0D) return true;
+  return codePoint >= 0x20 && codePoint !== 0x7F;
+}
 
 /**
  * Keep printable manuscript Unicode intact. The only characters removed here
@@ -17,7 +22,12 @@ const RTL_SCRIPT = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/u;
  */
 export function normalizePdfText(text: string): string {
   if (!text) return "";
-  return text.normalize("NFC").replace(NON_PRINTING_CONTROL, "");
+  let normalized = "";
+  for (const character of text.normalize("NFC")) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && isPrintablePdfCodePoint(codePoint)) normalized += character;
+  }
+  return normalized;
 }
 
 export function containsRtlScript(text: string): boolean {
