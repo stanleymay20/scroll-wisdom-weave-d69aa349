@@ -4460,10 +4460,16 @@ export async function generateKDPPDF(
         const bodyText = trimmed.replace(/^[-\u2022]\s|^\d+[.)]\s/, '');
         const words = bodyText.split(/\s+/);
         let line = prefix;
+        // pdf-lib sums glyph advances. Measure each normalized word once and
+        // accumulate widths instead of reshaping the growing line per word.
+        const spaceWidth = measureCached(timesRoman, bodySize, " ");
+        let lineWidth = measureCached(timesRoman, bodySize, prefix);
 
         for (const word of words) {
-          const testLine = line + (line && !prefix ? ' ' : line === prefix ? '' : ' ') + word;
-          const testW = timesRoman.widthOfTextAtSize(sanitizeForPDF(testLine), bodySize);
+          const separator = line && !prefix ? ' ' : line === prefix ? '' : ' ';
+          const testLine = line + separator + word;
+          const wordWidth = measureCached(timesRoman, bodySize, word);
+          const testW = lineWidth + (separator ? spaceWidth : 0) + wordWidth;
           if (testW > textWidth - indent && line !== prefix) {
             if (y < textBottom + 12) {
               addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
@@ -4477,8 +4483,10 @@ export async function generateKDPPDF(
             });
             y -= lineHeight;
             line = word;
+            lineWidth = wordWidth;
           } else {
             line = testLine;
+            lineWidth = testW;
           }
         }
         if (line) {

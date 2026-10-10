@@ -706,7 +706,7 @@ Deno.test("canonical EPUB: zip contains OPF + nav + chapter files", async () => 
 });
 // Unicode contracts exercise the same exported functions used by the handler,
 // including the legacy fallback and direct KDP paths.
-import { PDFDocument, PDFDict, PDFName, PDFRawStream } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, PDFDict, PDFName, PDFRawStream, PDFFont } from "https://esm.sh/pdf-lib@1.17.1";
 import { UnsupportedPdfGlyphError } from "../_shared/pdf-unicode.ts";
 
 const unicodeFixture = "ɛ ɔ α β ∑ ∫ ≤ ≥ — שלום";
@@ -834,3 +834,23 @@ for (const path of ["legacy", "kdp"] as const) {
     assert(caught.message.includes("cells without corresponding headers"));
   });
 }
+
+Deno.test("KDP interior: repeated prose does not remeasure growing lines", async () => {
+  const content = "KDP measurement contract ɛ ɔ α β ∑ ∫ ≤ ≥. ".repeat(300);
+  const original = PDFFont.prototype.widthOfTextAtSize;
+  let measuredCharacters = 0;
+  PDFFont.prototype.widthOfTextAtSize = function(this: PDFFont, text: string, size: number): number {
+    measuredCharacters += text.length;
+    return original.call(this, text, size);
+  };
+  try {
+    const bytes = await renderUnicodePath("kdp", content, "Measurement contract");
+    assertValidPDF(bytes);
+    // Allow front matter and running headers, but reject repeatedly shaping
+    // the entire growing line for every word in a book-length paragraph.
+    assert(measuredCharacters < content.length * 2,
+      `font measurement processed ${measuredCharacters} characters for ${content.length} input characters`);
+  } finally {
+    PDFFont.prototype.widthOfTextAtSize = original;
+  }
+});
