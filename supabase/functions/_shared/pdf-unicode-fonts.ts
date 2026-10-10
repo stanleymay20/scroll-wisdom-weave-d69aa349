@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- pdf-lib/fontkit monkey-patching crosses an intentionally dynamic runtime boundary. */
 import fontkit from "npm:@pdf-lib/fontkit@1.1.1";
 import bidiFactory from "npm:bidi-js@1.1.0";
-import dejavuPackage from "npm:dejavu-fonts-ttf@2.37.3/package.json" with { type: "json" };
 import {
   assertPdfGlyphCoverage,
   containsRtlScript,
@@ -18,9 +17,10 @@ export interface UnicodePdfFonts {
   mono: any;
 }
 
-if (dejavuPackage.version !== "2.37.3") {
-  throw new Error(`Unexpected DejaVu font package version: ${dejavuPackage.version}`);
-}
+// Keep the redistribution-safe DejaVu package pinned in the resolver itself.
+// Do not statically import package.json: this repository intentionally runs Deno
+// with nodeModulesDir="none", and package assets are resolved from Deno's npm
+// cache rather than a workspace node_modules tree.
 const DEJAVU_PACKAGE_JSON = import.meta.resolve("npm:dejavu-fonts-ttf@2.37.3/package.json");
 const bidi = bidiFactory();
 const GUARDED_PAGE = Symbol("scrolllibrary-unicode-pdf-page");
