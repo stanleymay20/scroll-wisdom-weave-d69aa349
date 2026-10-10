@@ -48,7 +48,8 @@ jobs:
           marker = '// =====================================================================\n// Canonical DOCX renderer tests'
           assert tests.count(marker) == 1, 'DOCX test marker drifted'
           block = (
-              'const KDP_UNICODE_PRINT_FIXTURE = "Akan ɛ ɔ · Greek α β · Math ∑ ∫ ≤ ≥ · Hebrew שלום";\n\n'
+              'const KDP_UNICODE_PRINT_FIXTURE = "Akan ɛ ɔ · Greek α β · Math ∑ ∫ ≤ ≥ · Hebrew שלום";\n'
+              'const KDP_UNICODE_CODE_FIXTURE = "ɛ ɔ α β ∑ ∫ ≤ ≥";\n\n'
               'async function renderKdpInteriorForTest(content: string) {\n'
               '  return await generateKDPPDF(\n'
               '    makeBook({ title: `KDP ${KDP_UNICODE_PRINT_FIXTURE}` }),\n'
@@ -73,7 +74,7 @@ jobs:
               '    `**Bold ${KDP_UNICODE_PRINT_FIXTURE}** and *italic ${KDP_UNICODE_PRINT_FIXTURE}*.`,\n'
               '    "",\n'
               '    "```text",\n'
-              '    KDP_UNICODE_PRINT_FIXTURE,\n'
+              '    KDP_UNICODE_CODE_FIXTURE,\n'
               '    "```",\n'
               '  ].join("\\n"));\n'
               '  assertValidPDF(bytes, 5_000);\n'
