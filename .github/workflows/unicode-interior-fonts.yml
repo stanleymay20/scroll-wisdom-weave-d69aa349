@@ -1,0 +1,62 @@
+name: Generate Unicode Interior Font Payloads
+
+on:
+  push:
+    branches:
+      - fix/unicode-safe-pdf-interior
+    paths:
+      - .github/workflows/unicode-interior-fonts.yml
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/unicode-safe-pdf-interior
+      - name: Fetch exact DejaVu 2.37.3 package without changing manifests
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/dejavu
+          cd /tmp/dejavu
+          tgz="$(npm pack dejavu-fonts-ttf@2.37.3 --silent)"
+          tar -xzf "$tgz"
+      - name: Generate deterministic five-style embedded payload
+        run: |
+          set -euo pipefail
+          src=/tmp/dejavu/package/ttf
+          out=supabase/functions/_shared/pdf-unicode-font-data.ts
+          sums=supabase/functions/_shared/fonts/SOURCE_SHA256SUMS.txt
+
+          names=(DejaVuSans.ttf DejaVuSans-Bold.ttf DejaVuSans-Oblique.ttf DejaVuSans-BoldOblique.ttf DejaVuSansMono.ttf)
+          vars=(DEJAVU_SANS_REGULAR_GZIP_BASE64 DEJAVU_SANS_BOLD_GZIP_BASE64 DEJAVU_SANS_ITALIC_GZIP_BASE64 DEJAVU_SANS_BOLD_ITALIC_GZIP_BASE64 DEJAVU_SANS_MONO_GZIP_BASE64)
+
+          {
+            echo '// GENERATED FILE. Source: dejavu-fonts-ttf@2.37.3.'
+            echo '// Payloads are deterministic gzip (-9 -n) of the original TTF files.'
+          } > "$out"
+          : > "$sums"
+
+          for i in "${!names[@]}"; do
+            file="${names[$i]}"
+            var="${vars[$i]}"
+            sha="$(sha256sum "$src/$file" | awk '{print $1}')"
+            printf '%s  %s\n' "$sha" "$file" >> "$sums"
+            gzip -9 -n -c "$src/$file" > "/tmp/$file.gz"
+            b64="$(base64 -w0 "/tmp/$file.gz")"
+            printf '// Source SHA-256 %s: %s\n' "$file" "$sha" >> "$out"
+            printf 'export const %s = "%s";\n' "$var" "$b64" >> "$out"
+          done
+      - name: Commit generated payload/provenance only
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/functions/_shared/pdf-unicode-font-data.ts supabase/functions/_shared/fonts/SOURCE_SHA256SUMS.txt
+          unexpected="$(git diff --cached --name-only | grep -vE '^supabase/functions/_shared/(pdf-unicode-font-data.ts|fonts/SOURCE_SHA256SUMS.txt)$' || true)"
+          test -z "$unexpected"
+          git commit -m "Embed Unicode interior font styles"
+          git push origin HEAD:fix/unicode-safe-pdf-interior
