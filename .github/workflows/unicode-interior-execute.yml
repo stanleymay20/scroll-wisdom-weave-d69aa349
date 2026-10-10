@@ -1,0 +1,94 @@
+name: Unicode Interior Execute
+
+on:
+  push:
+    branches:
+      - fix/unicode-safe-pdf-interior
+    paths:
+      - .github/workflows/unicode-interior-execute.yml
+
+permissions:
+  contents: write
+
+jobs:
+  execute:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/unicode-safe-pdf-interior
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: 2.9.6
+      - name: Execute reviewed generation and verification blocks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          workflow = Path('.github/workflows/unicode-interior-build.yml').read_text().splitlines()
+          targets = [
+              'Install locked repository dependencies',
+              'Generate deterministic DejaVu interior font payloads',
+              'Expand Unicode font helper for interior styles',
+              'Wire Unicode fonts into ordinary and KDP interior PDF renderers',
+              'Add interior Unicode regressions',
+              'Verify static Unicode renderer invariants',
+              'Type-check and run focused Unicode PDF tests',
+          ]
+
+          blocks = {}
+          i = 0
+          while i < len(workflow):
+              line = workflow[i]
+              prefix = '      - name: '
+              if line.startswith(prefix):
+                  name = line[len(prefix):]
+                  j = i + 1
+                  while j < len(workflow) and not workflow[j].startswith('      - '):
+                      if workflow[j] == '        run: |':
+                          j += 1
+                          body = []
+                          while j < len(workflow):
+                              candidate = workflow[j]
+                              if candidate and len(candidate) - len(candidate.lstrip(' ')) < 10:
+                                  break
+                              body.append(candidate[10:] if candidate.startswith('          ') else '')
+                              j += 1
+                          blocks[name] = '\n'.join(body) + '\n'
+                          break
+                      j += 1
+              i += 1
+
+          missing = [name for name in targets if name not in blocks]
+          if missing:
+              raise SystemExit(f'Missing reviewed workflow blocks: {missing}')
+
+          for name in targets:
+              print(f'::group::{name}', flush=True)
+              subprocess.run(['bash', '-euo', 'pipefail', '-c', blocks[name]], check=True)
+              print('::endgroup::', flush=True)
+          PY
+      - name: Commit only verified application slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Stanley Osei-Wusu"
+          git config user.email "107648937+stanleymay20@users.noreply.github.com"
+          git add \
+            supabase/functions/_shared/pdf-unicode-font-data.ts \
+            supabase/functions/_shared/pdf-unicode-fonts.ts \
+            supabase/functions/_shared/fonts/SOURCE_SHA256SUMS.txt \
+            supabase/functions/export-book/index.ts \
+            supabase/functions/export-book/_test.ts
+          git diff --cached --check
+          test -n "$(git diff --cached --name-only)"
+          unexpected="$(git diff --cached --name-only | grep -Ev '^(supabase/functions/_shared/pdf-unicode-font-data\.ts|supabase/functions/_shared/pdf-unicode-fonts\.ts|supabase/functions/_shared/fonts/SOURCE_SHA256SUMS\.txt|supabase/functions/export-book/index\.ts|supabase/functions/export-book/_test\.ts)$' || true)"
+          test -z "$unexpected"
+          git commit -m "Make PDF and KDP interior rendering Unicode-safe"
+          git push origin HEAD:fix/unicode-safe-pdf-interior
