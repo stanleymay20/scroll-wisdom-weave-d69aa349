@@ -27,13 +27,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          bun install --frozen-lockfile
           python3 <<'PY'
           from pathlib import Path
           import subprocess
 
           workflow = Path('.github/workflows/unicode-interior-build.yml').read_text().splitlines()
           targets = [
-              'Install locked repository dependencies',
               'Generate deterministic DejaVu interior font payloads',
               'Expand Unicode font helper for interior styles',
               'Wire Unicode fonts into ordinary and KDP interior PDF renderers',
