@@ -1,0 +1,45 @@
+name: Vendor Unicode KDP Fonts
+
+on:
+  push:
+    branches:
+      - fix/unicode-safe-pdf-kdp-clean
+    paths:
+      - .github/workflows/unicode-font-vendor.yml
+
+permissions:
+  contents: write
+
+jobs:
+  vendor:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/unicode-safe-pdf-kdp-clean
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+      - run: bun install --frozen-lockfile
+      - name: Copy only KDP-cover font assets and license
+        run: |
+          set -euo pipefail
+          dest="supabase/functions/_shared/fonts"
+          mkdir -p "$dest"
+          cp node_modules/dejavu-fonts-ttf/ttf/DejaVuSans.ttf "$dest/DejaVuSans.ttf"
+          cp node_modules/dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf "$dest/DejaVuSans-Bold.ttf"
+          cp node_modules/dejavu-fonts-ttf/LICENSE "$dest/DEJAVU-LICENSE.txt"
+          (cd "$dest" && sha256sum DejaVuSans.ttf DejaVuSans-Bold.ttf > SHA256SUMS.txt)
+      - name: Commit vendored assets only
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/functions/_shared/fonts/DejaVuSans.ttf \
+                  supabase/functions/_shared/fonts/DejaVuSans-Bold.ttf \
+                  supabase/functions/_shared/fonts/DEJAVU-LICENSE.txt \
+                  supabase/functions/_shared/fonts/SHA256SUMS.txt
+          unexpected="$(git diff --cached --name-only | grep -vE '^supabase/functions/_shared/fonts/(DejaVuSans.ttf|DejaVuSans-Bold.ttf|DEJAVU-LICENSE.txt|SHA256SUMS.txt)$' || true)"
+          test -z "$unexpected"
+          git commit -m "Vendor licensed Unicode fonts for KDP cover"
+          git push origin HEAD:fix/unicode-safe-pdf-kdp-clean
