@@ -3909,6 +3909,45 @@ export async function generateKDPPDF(
   useBleed: boolean,
   ctx: ExportContext,
 ): Promise<Uint8Array> {
+  const args = [book, chapters, author, identifier, isISBN, year, coverImageBytes,
+    isAcademic, citationStyle, bibliography, trimSize, useBleed, ctx] as const;
+  let pdfDoc = await renderKDPPDF(...args, 0);
+  const totalWords = chapters.reduce((sum: number, ch: any) => sum + (ch.content?.split(/\s+/).length || 0), 0);
+  const estimatedPages = Math.max(24, Math.ceil(totalWords / 250) + 10);
+  // KDP uses the final page count, rounded to even, rather than word estimates.
+  const actualPages = Math.ceil(pdfDoc.getPageCount() / 2) * 2;
+  const requiredInside = actualPages <= 150 ? 27 : actualPages <= 300 ? 36
+    : actualPages <= 500 ? 45 : actualPages <= 700 ? 54 : 63;
+  if (getKDPMargins(estimatedPages, useBleed).inside < requiredInside) {
+    // The existing largest gutter (76pt) exceeds every KDP band. Reflow once;
+    // save only the final layout so a failed draft never becomes an artifact.
+    pdfDoc = await renderKDPPDF(...args, actualPages);
+    const finalPages = Math.ceil(pdfDoc.getPageCount() / 2) * 2;
+    const finalRequired = finalPages <= 150 ? 27 : finalPages <= 300 ? 36
+      : finalPages <= 500 ? 45 : finalPages <= 700 ? 54 : 63;
+    if (getKDPMargins(actualPages, useBleed).inside < finalRequired) {
+      throw new Error("KDP_GUTTER_LAYOUT_UNSUPPORTED:" + finalPages);
+    }
+  }
+  return pdfDoc.save();
+}
+
+async function renderKDPPDF(
+  book: any,
+  chapters: any[],
+  author: string,
+  identifier: string,
+  isISBN: boolean,
+  year: number,
+  coverImageBytes: Uint8Array | null,
+  isAcademic: boolean,
+  citationStyle: string,
+  bibliography: string[],
+  trimSize: { width: number; height: number; name: string },
+  useBleed: boolean,
+  ctx: ExportContext,
+  gutterPageCountFloor: number,
+): Promise<PDFDocument> {
   const pdfDoc = await PDFDocument.create();
   installUnicodePdfTextGuard(pdfDoc);
   const unicodeFonts = await embedUnicodePdfInteriorFonts(pdfDoc);
@@ -3926,7 +3965,7 @@ export async function generateKDPPDF(
   // Estimate page count for gutter margin calculation
   const totalWords = chapters.reduce((sum: number, ch: any) => sum + (ch.content?.split(/\s+/).length || 0), 0);
   const estimatedPages = Math.max(24, Math.ceil(totalWords / 250) + 10);
-  const margins = getKDPMargins(estimatedPages, useBleed);
+  const margins = getKDPMargins(Math.max(estimatedPages, gutterPageCountFloor), useBleed);
 
   const textWidth = pageWidth - margins.inside - margins.outside;
   const textTop = pageHeight - margins.top - 20;
@@ -3942,7 +3981,7 @@ export async function generateKDPPDF(
     const numW = helvetica.widthOfTextAtSize(numStr, 9);
     const numX = isRecto ? pageWidth - margins.outside - numW : margins.outside;
     page.drawText(numStr, {
-      x: numX, y: margins.bottom, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.4),
+      x: numX, y: margins.bottom + 3, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.4),
     });
     if (currentChapterTitle) {
       const headerText = isRecto
@@ -3951,7 +3990,7 @@ export async function generateKDPPDF(
       const headerW = helvetica.widthOfTextAtSize(sanitizeForPDF(headerText), 8);
       const headerX = isRecto ? pageWidth - margins.outside - headerW : margins.outside;
       page.drawText(sanitizeForPDF(headerText), {
-        x: headerX, y: pageHeight - margins.top - 5, size: 8, font: helvetica, color: rgb(0.5, 0.5, 0.5),
+        x: headerX, y: pageHeight - margins.top - 8, size: 8, font: helvetica, color: rgb(0.5, 0.5, 0.5),
       });
     }
   };
@@ -4547,7 +4586,7 @@ export async function generateKDPPDF(
     pdfDoc.setProducer(ctx.showBranding ? 'ScrollLibrary KDP Export' : (ctx.pub.publisher_name || author));
   }
 
-  return pdfDoc.save();
+  return pdfDoc;
 }
 
 function kdpWrapText(text: string, font: any, size: number, maxWidth: number): string[] {
