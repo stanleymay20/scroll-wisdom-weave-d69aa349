@@ -21,7 +21,8 @@ WHERE oid IN (
     'public.get_user_marketplace_fee_bps(uuid)'::regprocedure,
     'public.get_my_billing_usage_snapshot()'::regprocedure
 );
-CREATE TEMP TABLE acl_policy_baseline AS SELECT * FROM pg_policy;
+CREATE TEMP TABLE acl_policy_baseline AS
+SELECT oid, row_to_json(p)::text AS definition FROM pg_policy p;
 -- Reproduce the catalog grants observed on the shared hosted database.
 GRANT EXECUTE ON FUNCTION public.reserve_billing_usage(uuid,text,text,bigint,bigint) TO PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.release_billing_usage(uuid,text,text,bigint) TO PUBLIC, anon, authenticated;
@@ -152,8 +153,8 @@ BEGIN
     END LOOP;
   END LOOP;
   IF EXISTS (SELECT 1 FROM acl_function_bodies b WHERE b.definition IS DISTINCT FROM pg_get_functiondef(b.oid))
-     OR EXISTS ((SELECT * FROM pg_policy EXCEPT SELECT * FROM acl_policy_baseline)
-                UNION ALL (SELECT * FROM acl_policy_baseline EXCEPT SELECT * FROM pg_policy)) THEN
+     OR EXISTS ((SELECT oid, row_to_json(p)::text FROM pg_policy p EXCEPT SELECT * FROM acl_policy_baseline)
+                UNION ALL (SELECT * FROM acl_policy_baseline EXCEPT SELECT oid, row_to_json(p)::text FROM pg_policy p)) THEN
     RAISE EXCEPTION 'permission repair altered a function body or RLS policy';
   END IF;
 END $$;
