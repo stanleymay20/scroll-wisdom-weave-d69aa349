@@ -1,15 +1,15 @@
-// @vitest-environment node
 import { readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { resolve } from "node:path";
+import { createHash, webcrypto } from "node:crypto";
 import ts from "typescript";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { computeSha256Hex } from "../../supabase/functions/_shared/export/hash";
 import { recordExportEvent } from "../../supabase/functions/_shared/export/audit";
 
 // Execute the actual handler's post-render delivery section without starting an
 // Edge server or contacting storage/database services. Renderer tests cover the
 // preceding section; this boundary catches early responses that skip auditing.
-const source = readFileSync(new URL("../../supabase/functions/export-book/index.ts", import.meta.url), "utf8");
+const source = readFileSync(resolve(process.cwd(), "supabase/functions/export-book/index.ts"), "utf8");
 const start = source.indexOf("    const byteSize = renderedBytes.byteLength;");
 const end = source.indexOf("\n  } catch (error) {", start);
 if (start < 0 || end < start) throw new Error("Review delivery harness after handler restructuring");
@@ -62,6 +62,8 @@ function assertAudit(result: Awaited<ReturnType<typeof run>>) {
 }
 
 describe("actual export-book delivery and integrity boundary", () => {
+  beforeEach(() => vi.stubGlobal("crypto", webcrypto));
+  afterEach(() => vi.unstubAllGlobals());
   it("audits a large direct binary file without storage or base64 allocation", async () => {
     const result = await run(limit + 1, true);
     assertAudit(result);
