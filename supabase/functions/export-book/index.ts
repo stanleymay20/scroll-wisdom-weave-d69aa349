@@ -1828,21 +1828,9 @@ serve(async (req) => {
 
     const byteSize = renderedBytes.byteLength;
     const wantsDirectBinary = req.headers.get(DIRECT_BINARY_EXPORT_HEADER) === "binary";
-    if (wantsDirectBinary && byteSize > INLINE_EXPORT_MAX_BYTES) {
-      console.log(`[EXPORT] returning direct binary response (${Math.round(byteSize / 1024)}KB) to avoid worker memory pressure`);
-      const directBinaryBody = new Uint8Array(renderedBytes).buffer;
-      return new Response(directBinaryBody, {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": contentType,
-          "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "'")}"`,
-          "Access-Control-Expose-Headers": "Content-Disposition, X-Export-Byte-Size",
-          "X-Export-Byte-Size": String(byteSize),
-        },
-      });
-    }
+    const useDirectBinary = wantsDirectBinary && byteSize > INLINE_EXPORT_MAX_BYTES;
 
-    if (byteSize > INLINE_EXPORT_MAX_BYTES) {
+    if (!useDirectBinary && byteSize > INLINE_EXPORT_MAX_BYTES) {
       storagePath = buildExportStoragePath(user.id, bookId, correlationId, filename);
       const { error: uploadError } = await supabase.storage
         .from("exports")
@@ -1866,7 +1854,7 @@ serve(async (req) => {
       downloadUrl = signedUrlData.signedUrl;
       isBase64 = false;
       console.log(`[EXPORT] rendered file stored for signed download (${Math.round(byteSize / 1024)}KB)`);
-    } else {
+    } else if (!useDirectBinary) {
       content = uint8ArrayToBase64(renderedBytes);
       isBase64 = true;
     }
@@ -1897,6 +1885,20 @@ serve(async (req) => {
       exportEventId = result.exportEventId;
     } catch (e) {
       console.warn("[EXPORT] export event logging failed (non-fatal):", e);
+    }
+
+    if (useDirectBinary) {
+      console.log(`[EXPORT] returning direct binary response (${Math.round(byteSize / 1024)}KB) to avoid worker memory pressure`);
+      const directBinaryBody = new Uint8Array(renderedBytes).buffer;
+      return new Response(directBinaryBody, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": contentType,
+          "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "'")}"`,
+          "Access-Control-Expose-Headers": "Content-Disposition, X-Export-Byte-Size",
+          "X-Export-Byte-Size": String(byteSize),
+        },
+      });
     }
 
     return new Response(
