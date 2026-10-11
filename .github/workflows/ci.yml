@@ -142,6 +142,8 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-independent-review.sql
       - name: Assert economic billing usage and order authority
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-economic-billing-db-security.sql
+      - name: Rehearse shared-database financial ACL correction without persisting changes
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-commercial-privilege-convergence.sql
       - name: Assert atomic book-generation quota reservation contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-book-generation-quota-db-security.sql
       - name: Assert expired workers and stale revisions cannot overwrite chapters
