@@ -80,7 +80,7 @@ jobs:
       - run: bun install --frozen-lockfile
 
       - name: Install pinned Supabase CLI
-        uses: supabase/setup-cli@v3.0.0
+        uses: supabase/setup-cli@v3.0.1
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
           github-token: ${{ github.token }}
