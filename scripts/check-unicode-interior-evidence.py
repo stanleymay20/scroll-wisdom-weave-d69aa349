@@ -5,14 +5,15 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from pdf_font_evidence import inspect_font_listing
 
 root = Path(sys.argv[1])
 for name in ("canonical", "legacy", "kdp"):
     pdf = root / f"{name}.pdf"
     fonts = subprocess.check_output(["pdffonts", str(pdf)], text=True)
     (root / f"{name}-pdffonts.txt").write_text(fonts)
-    rows = fonts.splitlines()[2:]
-    if len(rows) != 5 or any(not re.search(r"\byes\s+yes\s+yes\b", row) for row in rows):
+    font_report = inspect_font_listing(fonts)
+    if len(font_report["fonts"]) != 5 or not font_report["passed"]:
         raise SystemExit(f"{name}: expected five embedded subset fonts with Unicode mappings\n{fonts}")
     text = subprocess.check_output(["pdftotext", "-layout", str(pdf), "-"], text=True)
     (root / f"{name}-text.txt").write_text(text)
