@@ -230,8 +230,25 @@ async function payOnHostedCheckout(url, successUrlPrefix, label) {
     if (await name.isVisible().catch(() => false)) await name.fill("ScrollLibrary CI");
     const country = page.locator("#billingCountry");
     if (await country.isVisible().catch(() => false)) await country.selectOption("US");
+    // Checkout collects a complete billing address for tax. These are disposable
+    // test-buyer details, not production customer data.
+    const address = page.locator("#billingAddressLine1");
+    if (await address.isVisible().catch(() => false)) {
+      await address.fill("123 Test Street");
+      await address.press("Tab");
+    }
+    const city = page.locator("#billingLocality");
+    if (await city.isVisible().catch(() => false)) await city.fill("New York");
+    const state = page.locator("#billingAdministrativeArea");
+    if (await state.isVisible().catch(() => false)) await state.selectOption("NY");
     const postal = page.locator("#billingPostalCode");
     if (await postal.isVisible().catch(() => false)) await postal.fill("10001");
+
+    const saveForLater = page.getByRole("checkbox", { name: /Save my information for faster checkout/i });
+    if (await saveForLater.isVisible().catch(() => false)) await saveForLater.uncheck();
+    // Explicit consent belongs to this generated CI buyer in Stripe test mode.
+    const terms = page.getByRole("checkbox", { name: /ScrollLibrary Terms/i });
+    if (await terms.isVisible().catch(() => false)) await terms.check();
 
     await page.locator('[data-testid="hosted-payment-submit-button"], button.SubmitButton').first().click();
     // The success page is the app, which is not running here; only reaching
@@ -503,7 +520,7 @@ await journey("P16", "Connect onboarding → account persisted → account.updat
   const creator = await createUser("payee");
   const started = await callFunction("stripe-connect-onboarding", creator, { action: "start", return_path: "/payout-profile" });
   if (started.status >= 500) {
-    throw new Error("stripe-connect-onboarding failed. If Stripe Connect is not enabled on this test account, enable it in the Stripe dashboard (test mode) and re-run.");
+    throw new Error(`stripe-connect-onboarding failed (${started.status}): ${JSON.stringify(started.body)}. Inspect the function logs before attributing this to Stripe Connect setup.`);
   }
   check(started.status === 200 && /^https:\/\/connect\.stripe\.com\//.test(started.body.onboarding_url ?? ""),
     "onboarding did not return a Stripe-hosted onboarding link", started.body);
