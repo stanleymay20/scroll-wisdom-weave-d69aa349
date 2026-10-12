@@ -259,6 +259,7 @@ jobs:
       - name: Test financial alerting contract
         run: |
           deno test supabase/functions/_shared/observability_test.ts
+          deno test --config supabase/functions/deno.json supabase/functions/_shared/stripe-webhook-signature_test.ts
       - name: Pin chapter regeneration edit-intent and persistence contract
         run: node scripts/check-chapter-regeneration-contract.mjs
       - name: Pin assessment answer-key, scoring and evidence authority

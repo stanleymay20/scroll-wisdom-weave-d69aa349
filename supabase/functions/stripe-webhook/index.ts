@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { verifyStripeWebhookEvent } from "../_shared/stripe-webhook-signature.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { payoutMethodForStatus, payoutStatusFromAccount } from "../_shared/stripe-connect.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -69,7 +70,7 @@ serve(async (req) => {
 
     let event: Stripe.Event;
     try {
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      event = await verifyStripeWebhookEvent(stripe, body, signature, webhookSecret);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
       logStep("Signature verification failed", { error: errorMessage });
