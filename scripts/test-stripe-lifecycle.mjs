@@ -22,6 +22,7 @@
  */
 import { createHmac, randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { createClient } from "@supabase/supabase-js";
 import { chromium } from "@playwright/test";
 
@@ -135,6 +136,16 @@ const WEBHOOK_SECRET = required("STRIPE_WEBHOOK_SECRET");
 const CATALOGUE = JSON.parse(required("STRIPE_CATALOGUE_JSON"));
 // Allowed return origins in create-checkout and create-book-checkout.
 const APP_ORIGIN = "http://127.0.0.1:8080";
+// Receive the Checkout redirect; this page is not the application UI and
+// does not grant entitlements. Those are asserted from the signed webhook.
+const returnServer = createServer((_req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("ScrollLibrary disposable Stripe test return page");
+});
+await new Promise((resolve, reject) => {
+  returnServer.once("error", reject);
+  returnServer.listen(8080, "127.0.0.1", resolve);
+});
 
 const clientOptions = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
 const admin = createClient(SUPABASE_URL, SERVICE_KEY, clientOptions);
@@ -235,9 +246,9 @@ async function payOnHostedCheckout(url, successUrlPrefix, label) {
     const address = page.locator("#billingAddressLine1");
     if (await address.isVisible().catch(() => false)) {
       await address.fill("123 Test Street");
-      await address.press("Tab");
+      await address.press("Escape");
     }
-    const city = page.locator("#billingLocality");
+    const city = page.getByPlaceholder("City", { exact: true });
     if (await city.isVisible().catch(() => false)) await city.fill("New York");
     const state = page.locator("#billingAdministrativeArea");
     if (await state.isVisible().catch(() => false)) await state.selectOption("NY");
@@ -251,11 +262,16 @@ async function payOnHostedCheckout(url, successUrlPrefix, label) {
     if (await terms.isVisible().catch(() => false)) await terms.check();
 
     await page.locator('[data-testid="hosted-payment-submit-button"], button.SubmitButton').first().click();
-    // The success page is the app, which is not running here; only reaching
-    // the URL matters, so wait for the navigation to commit and no further.
+    // The local receiver proves the return URL; application state is checked
+    // separately after the signed webhook has been processed.
     await page.waitForURL((u) => u.href.startsWith(successUrlPrefix), { timeout: 90_000, waitUntil: "commit" });
   } catch (error) {
     await page.screenshot({ path: `${EVIDENCE_DIR}/${label}-checkout-failure.png`, fullPage: true }).catch(() => {});
+    const fields = await page.locator("input, select").evaluateAll((elements) => elements.map((el) => ({
+      id: el.id, name: el.getAttribute("name"), placeholder: el.getAttribute("placeholder"),
+      required: el.required, valid: el.validity.valid, validation: el.validationMessage,
+    }))).catch(() => []);
+    writeFileSync(`${EVIDENCE_DIR}/${label}-checkout-fields.json`, JSON.stringify(fields, null, 2));
     throw error;
   } finally {
     await page.close();
@@ -553,6 +569,7 @@ await journey("EVT", "Every webhook event this run caused finished processing", 
 // ---------------------------------------------------------------------------
 
 await browser?.close();
+await new Promise((resolve) => returnServer.close(resolve));
 for (const undo of cleanup.reverse()) await undo().catch((e) => console.warn(`cleanup: ${e.message}`));
 
 const summary = {
