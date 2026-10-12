@@ -246,14 +246,18 @@ async function payOnHostedCheckout(url, successUrlPrefix, label) {
     const address = page.locator("#billingAddressLine1");
     if (await address.isVisible().catch(() => false)) {
       await address.fill("123 Test Street");
-      await address.press("Escape");
+      // Complete Stripe's visible address selection. Leaving its suggestions
+      // open keeps the address incomplete even when native validity is true.
+      const suggestion = page.getByText("123 Test Street", { exact: true }).first();
+      await suggestion.waitFor({ state: "visible", timeout: 10_000 });
+      await suggestion.click();
     }
     const city = page.getByPlaceholder("City", { exact: true });
-    if (await city.isVisible().catch(() => false)) await city.fill("New York");
+    if (await city.isVisible().catch(() => false) && !(await city.inputValue())) await city.fill("New York");
     const state = page.locator("#billingAdministrativeArea");
-    if (await state.isVisible().catch(() => false)) await state.selectOption("NY");
+    if (await state.isVisible().catch(() => false) && !(await state.inputValue())) await state.selectOption("NY");
     const postal = page.locator("#billingPostalCode");
-    if (await postal.isVisible().catch(() => false)) await postal.fill("10001");
+    if (await postal.isVisible().catch(() => false) && !(await postal.inputValue())) await postal.fill("10001");
 
     const saveForLater = page.getByRole("checkbox", { name: /Save my information for faster checkout/i });
     if (await saveForLater.isVisible().catch(() => false)) await saveForLater.uncheck();
