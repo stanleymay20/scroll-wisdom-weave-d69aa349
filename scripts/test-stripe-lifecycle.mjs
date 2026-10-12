@@ -248,7 +248,7 @@ async function payOnHostedCheckout(url, successUrlPrefix, label) {
       await address.fill("123 Test Street");
       // Complete Stripe's visible address selection. Leaving its suggestions
       // open keeps the address incomplete even when native validity is true.
-      const suggestion = page.getByText("123 Test Street", { exact: true }).first();
+      const suggestion = page.getByText(/^123 Test St(?:reet)?$/i).first();
       await suggestion.waitFor({ state: "visible", timeout: 10_000 });
       await suggestion.click();
     }
