@@ -265,10 +265,27 @@ async function payOnHostedCheckout(url, successUrlPrefix, label) {
     const terms = page.getByRole("checkbox", { name: /ScrollLibrary Terms/i });
     if (await terms.isVisible().catch(() => false)) await terms.check();
 
-    await page.locator('[data-testid="hosted-payment-submit-button"], button.SubmitButton').first().click();
+    const submit = page.locator('[data-testid="hosted-payment-submit-button"], button.SubmitButton').first();
+    await submit.click();
     // The local receiver proves the return URL; application state is checked
     // separately after the signed webhook has been processed.
-    await page.waitForURL((u) => u.href.startsWith(successUrlPrefix), { timeout: 90_000, waitUntil: "commit" });
+    const returned = (u) => u.href.startsWith(successUrlPrefix);
+    try {
+      await page.waitForURL(returned, { timeout: 15_000, waitUntil: "commit" });
+    } catch (error) {
+      // Hosted Checkout can discard a submit while address/tax state settles.
+      // Retry once only for this same, unpaid, open session and an idle form.
+      const sessionId = new URL(url).pathname.split("/").find((part) => part.startsWith("cs_test_"));
+      if (error.name !== "TimeoutError" || !sessionId ||
+          new URL(page.url()).hostname !== "checkout.stripe.com" ||
+          !(await submit.isVisible()) || !(await submit.isEnabled()) ||
+          await page.locator('[role="alert"]:visible').count()) throw error;
+      const session = await stripe("GET", `/checkout/sessions/${sessionId}`);
+      if (session.status !== "open" || session.payment_status === "paid") throw error;
+      console.log(`${label}: retrying the same unpaid open Checkout session once`);
+      await submit.click();
+      await page.waitForURL(returned, { timeout: 75_000, waitUntil: "commit" });
+    }
   } catch (error) {
     await page.screenshot({ path: `${EVIDENCE_DIR}/${label}-checkout-failure.png`, fullPage: true }).catch(() => {});
     const fields = await page.locator("input, select").evaluateAll((elements) => elements.map((el) => ({
