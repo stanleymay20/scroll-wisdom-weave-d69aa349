@@ -151,7 +151,7 @@ jobs:
           } > "$env_file"
           nohup supabase functions serve --env-file "$env_file" > "$RUNNER_TEMP/functions.log" 2>&1 &
           for _ in $(seq 1 90); do
-            code="$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS "$E2E_SUPABASE_URL/functions/v1/check-subscription" || true)"
+            code="$(curl --connect-timeout 2 --max-time 5 -s -o /dev/null -w '%{http_code}' -X OPTIONS "$E2E_SUPABASE_URL/functions/v1/check-subscription" || true)"
             if [ "$code" = "200" ]; then echo "Edge Functions are serving."; exit 0; fi
             sleep 2
           done
