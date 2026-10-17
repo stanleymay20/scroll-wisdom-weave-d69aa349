@@ -114,11 +114,15 @@ until provider qualification evidence passes.
 ### Supabase Edge runtime
 
 ```
-GA_PAYMENTS_ENABLED=true
+# Baseline is fail-closed. Open each separately, in a reviewed change,
+# only AFTER exact-head verification of the corresponding commercial journey.
+GA_PAYMENTS_ENABLED=false
+GA_TEAMS_SUBSCRIPTION_ENABLED=false
 GA_MARKETPLACE_PAYMENTS_ENABLED=false
 GA_MARKETPLACE_PAYOUTS_ENABLED=false
-GA_PUBLISHING_SERVICES_BILLING_ENABLED=true
-GA_PUBLICATION_MINT_ENABLED=true
+GA_PUBLISHING_SERVICES_BILLING_ENABLED=false
+GA_PUBLICATION_MINT_ENABLED=false
+GA_ADVANCED_AUTHORING_ENABLED=false
 
 STRIPE_PRODUCT_CREATOR=prod_VMT9BjzHXGyBlg
 STRIPE_PRODUCT_PRO=prod_VMTAtBU2pdiaTU
