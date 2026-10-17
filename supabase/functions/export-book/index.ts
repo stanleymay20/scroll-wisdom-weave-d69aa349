@@ -1902,8 +1902,14 @@ serve(async (req) => {
       // A private stored object may exist if signed-download delivery was
       // prepared first; do not leave an unverified orphan behind knowingly.
       if (storagePath) {
-        const { error: removalError } = await supabase.storage.from("exports").remove([storagePath]);
-        if (removalError) console.warn("[EXPORT] unaudited object cleanup failed:", removalError);
+        try {
+          const { error: removalError } = await supabase.storage.from("exports").remove([storagePath]);
+          if (removalError) console.warn("[EXPORT] unaudited object cleanup failed:", removalError);
+        } catch (cleanupError) {
+          // A cleanup outage must not replace the original certification
+          // denial or cause an unverified signed link to be returned.
+          console.warn("[EXPORT] unaudited object cleanup unavailable:", cleanupError);
+        }
       }
       throw error;
     }
