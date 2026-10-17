@@ -201,7 +201,10 @@ async function waitFor(description, probe, { timeoutMs = 90_000, intervalMs = 1_
   let last;
   while (Date.now() < deadline) {
     last = await probe();
-    if (last) return last;
+    // Zero is a valid reconciled entitlement (e.g. a fully refunded usage
+    // pack). Treat only explicit no-result sentinels as pending; never confuse
+    // a numeric 0 with a failed refund reversal.
+    if (last !== null && last !== undefined && last !== false) return last;
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
   throw new Error(`Timed out after ${timeoutMs / 1000}s waiting for: ${description}`);
