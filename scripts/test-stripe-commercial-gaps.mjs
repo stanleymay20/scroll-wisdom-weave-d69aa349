@@ -307,8 +307,15 @@ async function payOnHostedCheckout(url, successPrefix, label) {
     if (await state.isVisible().catch(() => false) && !(await state.inputValue())) await state.selectOption("NY");
     const postal = page.locator("#billingPostalCode");
     if (await postal.isVisible().catch(() => false) && !(await postal.inputValue())) await postal.fill("10001");
-    const save = page.getByRole("checkbox", { name: /Save my information for faster checkout/i });
-    if (await save.isVisible().catch(() => false)) await save.uncheck();
+    // Stripe Link UI may say "Save my information with Link for faster
+    // checkout" and opt in by default. Leaving it checked adds a required
+    // phone field and blocks the paid Checkout return in headless CI.
+    const save = page.getByRole("checkbox", { name: /Save my information/i });
+    if (await save.waitFor({ state: "visible", timeout: 3_000 }).then(() => true).catch((error) => {
+      if (error?.name !== "TimeoutError") throw error;
+      return false;
+    })) await save.uncheck();
+    if (await save.isVisible()) check(!(await save.isChecked()), "optional Stripe Link enrollment must be off");
     const terms = page.getByRole("checkbox", { name: /ScrollLibrary Terms/i });
     if (await terms.isVisible().catch(() => false)) await terms.check();
     const submit = page.locator('[data-testid="hosted-payment-submit-button"], button.SubmitButton').first();
