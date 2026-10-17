@@ -285,7 +285,7 @@ async function payOnHostedCheckout(url, successPrefix, label) {
       // fields depending on account/session/UI rollout. The suggestion is a
       // convenience, not a payment invariant, so use it when present and fall
       // through to the explicit city/state/postal fields when it is absent.
-      const suggestion = page.getByText(/^123 Test St(?:reet)?\\b/i).first();
+      const suggestion = page.getByText(/^123 Test St(?:reet)?\b/i).first();
       if (await suggestion.isVisible({ timeout: 5_000 }).catch(() => false)) {
         await suggestion.click();
       } else {
