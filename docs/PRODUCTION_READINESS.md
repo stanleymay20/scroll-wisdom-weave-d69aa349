@@ -34,7 +34,7 @@ Lovable-hosted Vite builds do not reliably expose a Git commit SHA or a readable
 
 A source fingerprint is evidence of source equivalence, not a replacement for a Git commit. GA evidence for a hosted rebuild must record the intended Git commit and prove that production's `sourceFingerprint` equals the fingerprint in that commit's CI release artifact. A missing or mismatched fingerprint is a release blocker.
 
-The `GA Production Verification` workflow performs this comparison against `https://scrolllibrary.org/release.json` and also requires a successful exact-head Stripe test-mode lifecycle before the release can be certified.
+The `GA Production Verification` workflow compares hosted source identity against `https://scrolllibrary.org/release.json`, requires the specified exact-head workflow checks and exercises public-route smoke tests. If subscription payment writes are open, it additionally requires a successful executed exact-head Stripe lifecycle; when subscription payment writes are proven disabled, that lifecycle is not required **for this scoped smoke check**. Its artifact is explicitly `PRODUCTION_IDENTITY_AND_PUBLIC_SMOKE_PASS` with `commercialGaApproval=NOT_ASSESSED`. This is **never** commercial GA certification: the canonical release issue and signed evidence pack must separately prove live schema semantics, production auth/RLS, content quality, KDP, operational rehearsals and each enabled commercial domain. Other payment-writing endpoints cannot be inferred from the subscription Checkout probe.
 
 ## Critical staging journeys
 
