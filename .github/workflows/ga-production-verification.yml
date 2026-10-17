@@ -98,26 +98,44 @@ jobs:
             echo "$workflow: success"
           done
 
-      - name: Prove production payment-write posture
+      - name: Prove subscription checkout and related payment entry-point gates
         id: payment_gate
         shell: bash
         run: |
           set -euo pipefail
+          # Unauthenticated, synthetic empty requests. Only endpoints that
+          # check the payment kill switch before auth/validation are probed.
+          # These checks never create a real Checkout Session or Stripe object.
           body_file="$(mktemp)"
-          code="$(curl --silent --show-error --output "$body_file" --write-out '%{http_code}' \
+          code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 --output "$body_file" --write-out '%{http_code}' \
             --request POST \
             --header 'Content-Type: application/json' \
             --data '{}' \
             "$FUNCTIONS_URL/create-checkout" || true)"
           body="$(cat "$body_file")"
-          echo "create-checkout probe: HTTP $code $body"
           gate_code="$(printf '%s' "$body" | jq -r '.code // empty' 2>/dev/null || true)"
+          echo "subscription checkout gate probe: HTTP $code, code=$gate_code"
           if [ "$code" = "503" ] && [ "$gate_code" = "ga_payments_disabled" ]; then
             echo "disabled=true" >> "$GITHUB_OUTPUT"
-            echo "Production payment writes are fail-closed."
+            for endpoint in create-billing-order-checkout stripe-connect-onboarding; do
+              code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 --output "$body_file" --write-out '%{http_code}' \
+                --request POST \
+                --header 'Content-Type: application/json' \
+                --data '{}' \
+                "$FUNCTIONS_URL/$endpoint" || true)"
+              gate_code="$(jq -r '.code // empty' "$body_file" 2>/dev/null || true)"
+              echo "$endpoint gate probe: HTTP $code, code=$gate_code"
+              if [ "$code" != "503" ] || [ "$gate_code" != "ga_payments_disabled" ]; then
+                echo "::error::$endpoint is not independently proven closed; do not infer payment containment"
+                exit 1
+              fi
+            done
+            echo "related_disabled=true" >> "$GITHUB_OUTPUT"
+            echo "Three subscription/billing/Connect entry points are confirmed closed; administrative refunds, marketplace purchases, customer portal and all other Stripe writes remain NOT ASSESSED."
           else
             echo "disabled=false" >> "$GITHUB_OUTPUT"
-            echo "Production payment writes are open; exact-head Stripe lifecycle proof is required."
+            echo "related_disabled=false" >> "$GITHUB_OUTPUT"
+            echo "Subscription checkout was not proven disabled; executed exact-head Stripe lifecycle proof is required."
           fi
 
       - name: Require Stripe lifecycle to have run, not skipped when payments are open
@@ -166,7 +184,8 @@ jobs:
         env:
           RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
           EXPECTED_FINGERPRINT: ${{ steps.source.outputs.fingerprint }}
-          PAYMENT_WRITES_DISABLED: ${{ steps.payment_gate.outputs.disabled }}
+          SUBSCRIPTION_CHECKOUT_DISABLED: ${{ steps.payment_gate.outputs.disabled }}
+          RELATED_ENTRY_POINTS_DISABLED: ${{ steps.payment_gate.outputs.related_disabled }}
         shell: bash
         run: |
           set -euo pipefail
@@ -175,10 +194,10 @@ jobs:
           import { readFileSync, writeFileSync } from "node:fs";
           import { buildProductionVerificationEvidence } from "./scripts/production-verification-evidence.mjs";
 
-          if (!["true", "false"].includes(process.env.PAYMENT_WRITES_DISABLED)) {
+          if (!["true", "false"].includes(process.env.SUBSCRIPTION_CHECKOUT_DISABLED)) {
             throw new Error("Subscription payment gate probe did not produce a boolean result");
           }
-          const paymentsDisabled = process.env.PAYMENT_WRITES_DISABLED === "true";
+          const subscriptionCheckoutDisabled = process.env.SUBSCRIPTION_CHECKOUT_DISABLED === "true";
           const evidence = buildProductionVerificationEvidence({
             verifiedAt: new Date().toISOString(),
             workflowRunId: process.env.GITHUB_RUN_ID,
@@ -186,10 +205,11 @@ jobs:
             releaseSha: process.env.RELEASE_SHA,
             expectedSourceFingerprint: process.env.EXPECTED_FINGERPRINT,
             production: JSON.parse(readFileSync("live-release.json", "utf8")),
-            paymentWritesDisabled: paymentsDisabled,
+            subscriptionCheckoutDisabled,
+            relatedCheckoutAndConnectDisabled: process.env.RELATED_ENTRY_POINTS_DISABLED === "true",
             // Earlier workflow steps enforce an exact-head success before
             // this point if the production Checkout gate is open.
-            stripeLifecyclePassed: !paymentsDisabled,
+            stripeLifecyclePassed: !subscriptionCheckoutDisabled,
           });
 
           writeFileSync("ga-production-evidence.json", JSON.stringify(evidence, null, 2) + "\n");
