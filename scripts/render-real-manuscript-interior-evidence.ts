@@ -29,7 +29,7 @@ function nonempty(value: unknown, name: string): string {
   return value.trim();
 }
 async function sha256(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 function validateChapters(value: unknown): BookChapter[] {
