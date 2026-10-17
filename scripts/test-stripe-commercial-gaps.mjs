@@ -210,6 +210,13 @@ async function waitFor(description, probe, { timeoutMs = 90_000, intervalMs = 1_
   throw new Error(`Timed out after ${timeoutMs / 1000}s waiting for: ${description}`);
 }
 
+// Contract regression: a legitimate fully-refunded entitlement is numeric 0.
+// Reject a future change that turns the zero-valued success back into a timeout.
+const zeroResult = await waitFor("zero-valued entitlement regression", async () => 0, {
+  timeoutMs: 25, intervalMs: 1,
+});
+check(zeroResult === 0, "zero-valued refund reconciliation regression");
+
 async function journey(id, title, body) {
   const started = Date.now();
   process.stdout.write(`\n▶ ${id} ${title}\n`);
