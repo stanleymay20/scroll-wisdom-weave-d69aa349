@@ -25,6 +25,9 @@ Source JSON expected by the verifier (private file only):
 {
   "book_id": "00000000-0000-4000-8000-000000000001",
   "release_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "title": "Authorized Book",
+  "author_name": "Authorized Author",
+  "publisher_name": "Authorized Imprint",
   "chapters": [
     {"chapter_number": 1, "title": "Chapter 1", "content": "Complete generated content goes here", "is_generated": true}
   ]
@@ -34,6 +37,21 @@ Source JSON expected by the verifier (private file only):
 The example above is only a schema illustration, **not** a qualifying manuscript. The checker expects at least ten chapters, at least 100,000 content characters and at least 100 lexical words per chapter for a representative long-form trial. All chapters must be present in order.
 
 Ledger readback JSON (also private): `{"pdf":{"sha256":"<64-hex>","export_id":"<uuid>"},"kdp_pdf":{"sha256":"<64-hex>","export_id":"<uuid>"}}`. The script compares those operator-provided references to file bytes; it cannot prove they came from the real hosted database. That requires independent Lovable readback.
+
+## 2a. Optional offline reproduction through the exact existing renderer
+
+For source-only debugging **before** the candidate is deployed, the existing renderers can run privately without invoking Lovable, Stripe, a provider, or a live database. From an exact candidate checkout, set source JSON \`release_sha\` to the current Git checkout SHA and use the **complete** authorized manuscript. The \`title\` and \`author_name\` fields are required for this command.
+
+\`\`\`bash
+RELEASE_COMMIT_SHA=$(git rev-parse HEAD) deno run \
+  --config supabase/functions/deno.json --allow-net \
+  --allow-read=/private/book.json --allow-write=/private/kdp-qa \
+  --allow-env=RELEASE_COMMIT_SHA \
+  scripts/render-real-manuscript-interior-evidence.ts \
+  /private/book.json /private/kdp-qa
+\`\`\`
+
+This writes \`ordinary.pdf\`, \`kdp.pdf\` and an \`offline-render-manifest.json\` containing file digests, sizes and local durations (not raw text). For books with more than 18 chapters, the ordinary PDF reproduces the export handler's existing legacy-renderer decision. **This is not a hosted exact-head export.** It has no production export ledger entry, no database provenance, no KDP Previewer approval and cannot satisfy the full evidence gate. The separate verifier can analyze the PDFs mechanically, but without independently read-back hosted \`exports\` entries it must report the ledger reference missing and keep GA blocked.
 
 ## 3. Run deterministic, privacy-minimized mechanical checks
 
