@@ -70,6 +70,8 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - name: Reject destructive migrations in hardened migration era
         run: bun scripts/check-migration-safety.mjs
+      - name: Assert production smoke cannot declare commercial GA
+        run: node --test scripts/test-production-verification-evidence.mjs
 
   database-schema:
     name: Apply and lint Supabase schema
