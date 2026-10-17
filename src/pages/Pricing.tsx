@@ -52,9 +52,9 @@ const plans: PlanConfig[] = [
     features: [
       "10 book projects / month",
       "250k AI-generated words / month",
-      "10 AI-generated visuals",
+      "10 visual credits (visual generation after independent qualification)",
       "15 narration minutes",
-      "PDF / EPUB / DOCX when export gate is open",
+      "PDF / EPUB / DOCX only after the separate export gate is qualified",
       "7% marketplace fee when marketplace selling is available",
     ],
   },
@@ -66,9 +66,9 @@ const plans: PlanConfig[] = [
     features: [
       "30 book projects / month",
       "1M AI-generated words / month",
-      "60 AI-generated visuals",
+      "60 visual credits (visual generation after independent qualification)",
       "60 narration minutes",
-      "KDP PDF + stronger publication editorial review",
+      "KDP PDF and editorial tools require separate validation before use",
       "5% marketplace fee when marketplace selling is available",
     ],
   },
@@ -77,11 +77,11 @@ const plans: PlanConfig[] = [
     icon: Building2,
     tierKey: "prophet_tier",
     features: [
-      "100 pooled book projects / month",
-      "2.5M pooled AI-generated words / month",
+      "Planned: 100 pooled book projects / month (Teams not yet live)",
+      "Planned: 2.5M pooled AI-generated words / month",
       "200 AI-generated visuals",
       "180 narration minutes",
-      "5 seats included",
+      "Planned: 5 seats included after Teams GA",
       "3% marketplace fee when marketplace selling is available",
     ],
   },
@@ -148,6 +148,13 @@ export default function Pricing() {
       navigate("/generate");
       return;
     }
+    if (planTierKey === "prophet_tier" && !FEATURES.enableTeamsSubscriptionCheckout) {
+      toast({
+        title: "Teams enrollment is not open yet",
+        description: "Shared organization limits and seat inheritance require separate qualification.",
+      });
+      return;
+    }
     if (!FEATURES.enableSubscriptionCheckout) {
       toast({
         title: "Paid upgrades are not open yet",
@@ -179,7 +186,12 @@ export default function Pricing() {
       navigate("/auth", { state: { redirectTo: "/pricing" } });
       return;
     }
-    if (!FEATURES.enablePaidCheckout) {
+    const isPublishingService = Object.prototype.hasOwnProperty.call(PUBLISHING_SERVICE_PACKAGES, sku);
+    const isUsageAddon = Object.prototype.hasOwnProperty.call(USAGE_ADDONS, sku) && sku !== "team_seat";
+    const allowed = isPublishingService
+      ? FEATURES.enablePublishingServicesCheckout
+      : isUsageAddon && FEATURES.enableUsageAddonCheckout;
+    if (!allowed) {
       toast({
         title: "Purchases are not open yet",
         description: "The billing catalogue is implemented, but financial writes remain closed until validation passes.",
@@ -270,6 +282,9 @@ export default function Pricing() {
                 const isCurrent = isCurrentPlan(plan.tierKey);
                 const isPaidChoice = plan.tierKey !== "free";
                 const manageExisting = isSubscribed && isPaidChoice && !isCurrent;
+                const canChoosePlan = plan.tierKey === "prophet_tier"
+                  ? FEATURES.enableTeamsSubscriptionCheckout && FEATURES.enableSubscriptionCheckout
+                  : FEATURES.enableSubscriptionCheckout;
                 const price = billingCycle === "annual" ? config.annualPrice : config.monthlyPrice;
                 const period = config.monthlyPrice === 0 ? "forever" : billingCycle === "annual" ? "/year" : "/month";
 
@@ -315,7 +330,7 @@ export default function Pricing() {
                           disabled={
                             isCurrent
                             || !!checkoutLoading
-                            || (manageExisting ? portalLoading : (isPaidChoice && !FEATURES.enableSubscriptionCheckout))
+                            || (manageExisting ? portalLoading : (isPaidChoice && !canChoosePlan))
                           }
                         >
                           {checkoutLoading === plan.tierKey ? (
@@ -326,8 +341,8 @@ export default function Pricing() {
                             portalLoading ? "Opening billing…" : "Manage current plan"
                           ) : plan.tierKey === "free" ? (
                             "Get started free"
-                          ) : !FEATURES.enableSubscriptionCheckout ? (
-                            "Available after payment validation"
+                          ) : !canChoosePlan ? (
+                            plan.tierKey === "prophet_tier" ? "Teams available after separate validation" : "Available after payment validation"
                           ) : (
                             `Choose ${config.name}`
                           )}
@@ -368,8 +383,8 @@ export default function Pricing() {
                 <Badge variant="secondary" className="mb-3">GA safety gate</Badge>
                 <h2 className="text-2xl font-display font-bold mb-2">Prices are defined; live checkout remains closed</h2>
                 <p className="text-muted-foreground max-w-3xl mx-auto">
-                  Free GA remains available. Creator, Pro and Teams checkout will only open after the new Stripe catalogue,
-                  webhook lifecycle, entitlement sync and refund paths pass exact-head validation.
+                  Free GA remains available. Creator/Pro subscriptions require exact-head Stripe validation.
+                  Teams, publishing services, and advanced authoring each require separate qualification.
                 </p>
               </div>
             )}
@@ -403,14 +418,14 @@ export default function Pricing() {
                           size="sm"
                           variant="outline"
                           className="w-full"
-                          disabled={!FEATURES.enablePaidCheckout || !!orderCheckoutLoading || assistedLaunchPending}
+                          disabled={!FEATURES.enablePublishingServicesCheckout || !!orderCheckoutLoading || assistedLaunchPending}
                           onClick={() => handleOneTimePurchase(sku)}
                         >
                           {assistedLaunchPending
                             ? "Human service setup pending"
                             : orderCheckoutLoading === sku
                               ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing…</>
-                              : FEATURES.enablePaidCheckout ? "Purchase service" : "Available after validation"}
+                              : FEATURES.enablePublishingServicesCheckout ? "Purchase service" : "Publishing service not yet available"}
                         </Button>
                       </CardContent>
                     </Card>
@@ -430,7 +445,7 @@ export default function Pricing() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {usageAddons.map(([sku, addon]) => {
                   const recurringSeat = addon.billingMode === "recurring";
-                  const canBuyUsage = isSubscribed && FEATURES.enablePaidCheckout && !recurringSeat;
+                  const canBuyUsage = isSubscribed && FEATURES.enableUsageAddonCheckout && !recurringSeat;
                   return (
                     <Card key={sku}>
                       <CardContent className="p-5 space-y-3">
@@ -452,8 +467,8 @@ export default function Pricing() {
                             ? "Seat billing after Teams GA"
                             : !isSubscribed
                               ? "Paid plan required"
-                              : !FEATURES.enablePaidCheckout
-                                ? "Available after validation"
+                              : !FEATURES.enableUsageAddonCheckout
+                                ? "Available after usage-order validation"
                                 : orderCheckoutLoading === sku
                                   ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing…</>
                                   : "Buy usage pack"}
