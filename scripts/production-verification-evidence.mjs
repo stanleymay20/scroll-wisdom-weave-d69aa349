@@ -10,33 +10,45 @@ export function buildProductionVerificationEvidence({
   releaseSha,
   expectedSourceFingerprint,
   production,
-  paymentWritesDisabled,
+  subscriptionCheckoutDisabled,
+  relatedCheckoutAndConnectDisabled,
   stripeLifecyclePassed,
 }) {
   if (!releaseSha || !expectedSourceFingerprint || !production || !repository) {
     throw new Error("Missing release identity for production verification evidence");
   }
-  if (typeof paymentWritesDisabled !== "boolean" || typeof stripeLifecyclePassed !== "boolean") {
+  if (typeof subscriptionCheckoutDisabled !== "boolean" || typeof stripeLifecyclePassed !== "boolean") {
     throw new Error("Commercial gate evidence must use explicit boolean states");
   }
-  if (!paymentWritesDisabled && !stripeLifecyclePassed) {
-    throw new Error("Payment writes are open but the exact-head Stripe lifecycle has not passed");
+  if (subscriptionCheckoutDisabled && relatedCheckoutAndConnectDisabled !== true) {
+    throw new Error("Disabled subscription checkout does not prove billing-order and Connect entry points are closed");
+  }
+  if (!subscriptionCheckoutDisabled && !stripeLifecyclePassed) {
+    throw new Error("Subscription checkout is open but the exact-head Stripe lifecycle has not passed");
   }
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     verifiedAt,
     workflowRunId,
     repository,
     releaseSha,
     expectedSourceFingerprint,
     production,
-    paymentWrites: paymentWritesDisabled ? "disabled" : "enabled",
-    stripeLifecycle: paymentWritesDisabled ? "not_required_for_disabled_payment_probe" : "success",
+    subscriptionCheckoutWrites: subscriptionCheckoutDisabled ? "disabled" : "enabled",
+    billingOrderAndConnectEntryPoints: subscriptionCheckoutDisabled ? "confirmed_disabled" : "not_assessed",
+    // Administrative refunds, customer portal, marketplace sales, payout
+    // transfers and already-created Stripe objects are outside these probes.
+    broaderPaymentWriteContainment: "NOT_ASSESSED",
+    stripeLifecycle: subscriptionCheckoutDisabled ? "not_required_for_disabled_checkout_probes" : "success",
     verifiedScope: [
       "hosted_release_source_identity",
       "required_exact_head_workflow_results",
       "subscription_checkout_gate_probe",
+      ...(subscriptionCheckoutDisabled ? [
+        "billing_order_checkout_gate_probe",
+        "stripe_connect_onboarding_gate_probe",
+      ] : []),
       "public_route_http_smoke",
     ],
     // These are not evaluated by this workflow, even when another pipeline
