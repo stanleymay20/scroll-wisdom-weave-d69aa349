@@ -170,23 +170,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node --test scripts/test-production-verification-evidence.mjs
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from "node:fs";
+          import { buildProductionVerificationEvidence } from "./scripts/production-verification-evidence.mjs";
 
+          if (!["true", "false"].includes(process.env.PAYMENT_WRITES_DISABLED)) {
+            throw new Error("Subscription payment gate probe did not produce a boolean result");
+          }
           const paymentsDisabled = process.env.PAYMENT_WRITES_DISABLED === "true";
-
-          const evidence = {
-            schemaVersion: 1,
+          const evidence = buildProductionVerificationEvidence({
             verifiedAt: new Date().toISOString(),
             workflowRunId: process.env.GITHUB_RUN_ID,
             repository: process.env.GITHUB_REPOSITORY,
             releaseSha: process.env.RELEASE_SHA,
             expectedSourceFingerprint: process.env.EXPECTED_FINGERPRINT,
             production: JSON.parse(readFileSync("live-release.json", "utf8")),
-            paymentWrites: paymentsDisabled ? "disabled" : "enabled",
-            stripeLifecycle: paymentsDisabled ? "not_required_while_disabled" : "success",
-            result: "GA_PRODUCTION_VERIFICATION_PASS",
-          };
+            paymentWritesDisabled: paymentsDisabled,
+            // Earlier workflow steps enforce an exact-head success before
+            // this point if the production Checkout gate is open.
+            stripeLifecyclePassed: !paymentsDisabled,
+          });
 
           writeFileSync("ga-production-evidence.json", JSON.stringify(evidence, null, 2) + "\n");
           NODE
