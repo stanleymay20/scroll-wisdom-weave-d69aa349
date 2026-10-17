@@ -10,6 +10,7 @@ import { layoutFigure } from "../_shared/figure-layout.ts";
 import { auditBookForExport } from "../_shared/exportQuality.ts";
 import { computeSha256Hex } from "../_shared/export/hash.ts";
 import { recordExportEvent } from "../_shared/export/audit.ts";
+import { assertCertifiedExportAudit, CertifiedExportAuditError } from "../_shared/export/qualification.ts";
 import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";
 import { resolvePrepublicationIdentity } from "../_shared/publishingIdentity.ts";
 import { embedUnicodePdfInteriorFonts, installUnicodePdfTextGuard } from "../_shared/pdf-unicode-fonts.ts";
@@ -1861,6 +1862,7 @@ serve(async (req) => {
 
     let exportEventId: string | null = null;
     let exportFileHash: string | null = null;
+    let authorshipAuditRecorded = false;
     try {
       exportFileHash = await computeSha256Hex(renderedBytes);
 
@@ -1883,8 +1885,27 @@ serve(async (req) => {
         exportQualityScore,
       });
       exportEventId = result.exportEventId;
+      authorshipAuditRecorded = result.auditLogRecorded;
     } catch (e) {
-      console.warn("[EXPORT] export event logging failed (non-fatal):", e);
+      console.warn("[EXPORT] export event logging failed:", e);
+    }
+
+    // A canonical published export must never be presented as a verifiable
+    // deliverable without BOTH its immutable hash event and authorship audit.
+    // This guard applies identically to direct binary and signed URL delivery.
+    try {
+      assertCertifiedExportAudit(canonicalPublicationId, exportFileHash, {
+        exportEventId,
+        auditLogRecorded: authorshipAuditRecorded,
+      });
+    } catch (error) {
+      // A private stored object may exist if signed-download delivery was
+      // prepared first; do not leave an unverified orphan behind knowingly.
+      if (storagePath) {
+        const { error: removalError } = await supabase.storage.from("exports").remove([storagePath]);
+        if (removalError) console.warn("[EXPORT] unaudited object cleanup failed:", removalError);
+      }
+      throw error;
     }
 
     if (useDirectBinary) {
@@ -1928,12 +1949,14 @@ serve(async (req) => {
   } catch (error) {
     console.error("[EXPORT] Error:", error);
     return new Response(
-      JSON.stringify(error instanceof UnsupportedPdfGlyphError
-        ? { error: error.message, code: error.code, glyphs: error.glyphs, context: error.context }
+      JSON.stringify(error instanceof CertifiedExportAuditError
+        ? { error: error.message, code: error.code }
+        : error instanceof UnsupportedPdfGlyphError
+          ? { error: error.message, code: error.code, glyphs: error.glyphs, context: error.context }
         : error instanceof PdfTableLayoutError
           ? { error: error.message, code: error.code, context: error.context }
           : { error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: error instanceof CertifiedExportAuditError ? 503 : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
