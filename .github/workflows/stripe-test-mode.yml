@@ -2,7 +2,9 @@ name: Stripe Test-Mode Lifecycle
 
 # The money journeys end to end: real Stripe test mode, real hosted Checkout,
 # webhooks delivered by the Stripe CLI to a disposable local Supabase stack.
-# See scripts/test-stripe-lifecycle.mjs for what is asserted.
+# The canonical gate covers subscription/book/refund/Connect plus the commercial
+# gaps required by #134: monthly+annual catalogue authority, an annual paid
+# subscription and a one-time usage order/refund lifecycle.
 #
 # Needs the repository secret STRIPE_TEST_SECRET_KEY (an sk_test_ key). Until
 # it exists the lifecycle job is SKIPPED, not passed: a skipped check is not
@@ -27,8 +29,6 @@ env:
   RELEASE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   BUN_VERSION: 1.2.23
   SUPABASE_CLI_VERSION: 2.111.0
-  # Allowed return origin in create-checkout, customer-portal and
-  # create-book-checkout; nothing needs to listen on it.
   APP_ORIGIN: http://127.0.0.1:8080
 
 jobs:
@@ -47,18 +47,17 @@ jobs:
             exit 0
           fi
           echo "configured=false" >> "$GITHUB_OUTPUT"
-          message="STRIPE_TEST_SECRET_KEY is not configured: the Stripe lifecycle did NOT run. P03/P14/P15/P16 remain unproven."
+          message="STRIPE_TEST_SECRET_KEY is not configured: the Stripe lifecycle did NOT run. Paid commercial journeys remain unproven."
           echo "::warning::$message"
           echo "### Stripe lifecycle not run" >> "$GITHUB_STEP_SUMMARY"
           echo "$message" >> "$GITHUB_STEP_SUMMARY"
-          # Asked for explicitly, a missing key is a failure, not a skip.
           if [ "$EVENT" = "workflow_dispatch" ]; then exit 1; fi
 
   lifecycle:
     needs: preflight
     if: needs.preflight.outputs.configured == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
     steps:
@@ -122,11 +121,17 @@ jobs:
             echo "E2E_SUPABASE_SERVICE_ROLE_KEY=$ADMIN_KEY"
           } >> "$GITHUB_ENV"
 
-      - name: Ensure the Stripe test-mode catalogue
+      - name: Ensure recurring and one-time Stripe test catalogues
+        shell: bash
         run: |
           set -euo pipefail
-          catalogue="$(bun scripts/test-stripe-lifecycle.mjs catalogue)"
-          echo "STRIPE_CATALOGUE_JSON=$catalogue" >> "$GITHUB_ENV"
+          bundle="$(bun scripts/test-stripe-commercial-gaps.mjs catalogue)"
+          recurring="$(jq -c '.stripeCatalogue' <<< "$bundle")"
+          one_time="$(jq -c '.oneTimeCatalogue' <<< "$bundle")"
+          test -n "$recurring" && test "$recurring" != "null"
+          test -n "$one_time" && test "$one_time" != "null"
+          echo "STRIPE_CATALOGUE_JSON=$recurring" >> "$GITHUB_ENV"
+          echo "STRIPE_ONE_TIME_CATALOGUE_JSON=$one_time" >> "$GITHUB_ENV"
 
       - name: Obtain the Stripe CLI webhook signing secret
         run: |
@@ -143,22 +148,26 @@ jobs:
           {
             echo "STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY"
             echo "GA_PAYMENTS_ENABLED=true"
-            # Only the disposable local stack may exercise the book-payment journey.
             echo "GA_MARKETPLACE_PAYMENTS_ENABLED=true"
             echo "STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET"
             echo "STRIPE_CATALOGUE_JSON='$STRIPE_CATALOGUE_JSON'"
+            echo "STRIPE_ONE_TIME_CATALOGUE_JSON='$STRIPE_ONE_TIME_CATALOGUE_JSON'"
             echo "APP_URL=$APP_ORIGIN"
             echo "APP_ORIGIN=$APP_ORIGIN"
             echo "PUBLIC_SITE_URL=$APP_ORIGIN"
           } > "$env_file"
           nohup supabase functions serve --env-file "$env_file" > "$RUNNER_TEMP/functions.log" 2>&1 &
           for _ in $(seq 1 90); do
-            code="$(curl --connect-timeout 2 --max-time 5 -s -o /dev/null -w '%{http_code}' -X OPTIONS "$E2E_SUPABASE_URL/functions/v1/check-subscription" || true)"
-            if [ "$code" = "200" ]; then echo "Edge Functions are serving."; exit 0; fi
+            subscription_code="$(curl --connect-timeout 2 --max-time 5 -s -o /dev/null -w '%{http_code}' -X OPTIONS "$E2E_SUPABASE_URL/functions/v1/check-subscription" || true)"
+            usage_code="$(curl --connect-timeout 2 --max-time 5 -s -o /dev/null -w '%{http_code}' -X OPTIONS "$E2E_SUPABASE_URL/functions/v1/create-billing-order-checkout" || true)"
+            if [ "$subscription_code" = "200" ] && [ "$usage_code" = "200" ]; then
+              echo "Required Edge Functions are serving."
+              exit 0
+            fi
             sleep 2
           done
-          echo "Edge Functions did not become ready." >&2
-          tail -n 100 "$RUNNER_TEMP/functions.log" >&2
+          echo "Required Edge Functions did not become ready." >&2
+          tail -n 160 "$RUNNER_TEMP/functions.log" >&2
           exit 1
 
       - name: Forward Stripe test-mode webhooks to the local webhook
@@ -180,12 +189,23 @@ jobs:
       - name: Install Chromium for hosted Checkout
         run: bunx playwright install --with-deps chromium
 
-      - name: Run the Stripe test-mode lifecycle
+      - name: Run annual and usage-order commercial qualification
+        run: bun scripts/test-stripe-commercial-gaps.mjs run
+
+      - name: Run the canonical Stripe lifecycle
         run: bun scripts/test-stripe-lifecycle.mjs run
 
-      - name: Publish lifecycle summary
+      - name: Publish lifecycle summaries
         if: always()
         run: |
+          if [ -f stripe-commercial-gaps-evidence/summary.json ]; then
+            {
+              echo "### Stripe annual/usage commercial qualification"
+              echo '```json'
+              cat stripe-commercial-gaps-evidence/summary.json
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ -f stripe-lifecycle-evidence/summary.json ]; then
             {
               echo "### Stripe test-mode lifecycle"
@@ -206,7 +226,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: stripe-lifecycle-${{ github.sha }}
-          path: stripe-lifecycle-evidence/
+          path: |
+            stripe-commercial-gaps-evidence/
+            stripe-lifecycle-evidence/
           if-no-files-found: ignore
           retention-days: 30
 
