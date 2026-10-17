@@ -286,11 +286,18 @@ async function payOnHostedCheckout(url, successPrefix, label) {
       // convenience, not a payment invariant, so use it when present and fall
       // through to the explicit city/state/postal fields when it is absent.
       const suggestion = page.getByText(/^123 Test St(?:reet)?\b/i).first();
-      if (await suggestion.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      // Playwright Locator.isVisible() is an immediate probe: its timeout does
+      // NOT wait for asynchronous Google address results. Wait for the actual
+      // suggestion before clicking or the Checkout submit stays blocked behind
+      // the still-open address menu.
+      try {
+        await suggestion.waitFor({ state: "visible", timeout: 8_000 });
         await suggestion.click();
-      } else {
-        // Manual address path: dismiss optional autocomplete so Stripe's
-        // explicit city/state/ZIP fields remain available for validation.
+      } catch (error) {
+        if (error?.name !== "TimeoutError") throw error;
+        // Google autocomplete can be absent. Dismiss the optional popup and
+        // complete the visible manual billing fields below.
+        await address.press("Escape");
         await address.press("Tab");
       }
     }
