@@ -324,6 +324,7 @@ jobs:
           deno test supabase/functions/export-publication/index.test.ts
           deno test supabase/functions/_shared/__tests__/export-integrity.test.ts
           deno test supabase/functions/_shared/export/__tests__/s6a-extraction.test.ts
+          deno test supabase/functions/_shared/export/qualification_test.ts
       - name: Prove interior PDF embedded fonts and Unicode extraction
         run: |
           sudo apt-get update -qq
