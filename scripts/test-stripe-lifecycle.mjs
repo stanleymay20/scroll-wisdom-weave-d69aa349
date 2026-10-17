@@ -259,8 +259,13 @@ async function payOnHostedCheckout(url, successUrlPrefix, label) {
     const postal = page.locator("#billingPostalCode");
     if (await postal.isVisible().catch(() => false) && !(await postal.inputValue())) await postal.fill("10001");
 
-    const saveForLater = page.getByRole("checkbox", { name: /Save my information for faster checkout/i });
-    if (await saveForLater.isVisible().catch(() => false)) await saveForLater.uncheck();
+    // Stripe Link label has multiple current variants. The disposable CI
+    // buyer must not opt into Link, which also adds a required phone field.
+    const saveForLater = page.getByRole("checkbox", { name: /Save my information/i });
+    if (await saveForLater.waitFor({ state: "visible", timeout: 3_000 }).then(() => true).catch((error) => {
+      if (error?.name !== "TimeoutError") throw error;
+      return false;
+    })) await saveForLater.uncheck();
     // Explicit consent belongs to this generated CI buyer in Stripe test mode.
     const terms = page.getByRole("checkbox", { name: /ScrollLibrary Terms/i });
     if (await terms.isVisible().catch(() => false)) await terms.check();
