@@ -248,9 +248,17 @@ async function payOnHostedCheckout(url, successUrlPrefix, label) {
       await address.fill("123 Test Street");
       // Complete Stripe's visible address selection. Leaving its suggestions
       // open keeps the address incomplete even when native validity is true.
-      const suggestion = page.getByText(/^123 Test St(?:reet)?$/i).first();
-      await suggestion.waitFor({ state: "visible", timeout: 10_000 });
-      await suggestion.click();
+      const suggestion = page.getByText(/^123 Test St(?:reet)?\b/i).first();
+      // Stripe address suggestions include city/ZIP and arrive asynchronously.
+      // Do not require an exact text label; never submit with a pending popup.
+      try {
+        await suggestion.waitFor({ state: "visible", timeout: 8_000 });
+        await suggestion.click();
+      } catch (error) {
+        if (error?.name !== "TimeoutError") throw error;
+        await address.press("Escape");
+        await address.press("Tab");
+      }
     }
     const city = page.getByPlaceholder("City", { exact: true });
     if (await city.isVisible().catch(() => false) && !(await city.inputValue())) await city.fill("New York");
