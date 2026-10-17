@@ -22,6 +22,7 @@
  */
 import { createHmac, randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { createClient } from "@supabase/supabase-js";
 import { chromium } from "@playwright/test";
 
@@ -135,6 +136,16 @@ const WEBHOOK_SECRET = required("STRIPE_WEBHOOK_SECRET");
 const CATALOGUE = JSON.parse(required("STRIPE_CATALOGUE_JSON"));
 // Allowed return origins in create-checkout and create-book-checkout.
 const APP_ORIGIN = "http://127.0.0.1:8080";
+// Receive the Checkout redirect; this page is not the application UI and
+// does not grant entitlements. Those are asserted from the signed webhook.
+const returnServer = createServer((_req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("ScrollLibrary disposable Stripe test return page");
+});
+await new Promise((resolve, reject) => {
+  returnServer.once("error", reject);
+  returnServer.listen(8080, "127.0.0.1", resolve);
+});
 
 const clientOptions = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
 const admin = createClient(SUPABASE_URL, SERVICE_KEY, clientOptions);
@@ -230,15 +241,71 @@ async function payOnHostedCheckout(url, successUrlPrefix, label) {
     if (await name.isVisible().catch(() => false)) await name.fill("ScrollLibrary CI");
     const country = page.locator("#billingCountry");
     if (await country.isVisible().catch(() => false)) await country.selectOption("US");
+    // Checkout collects a complete billing address for tax. These are disposable
+    // test-buyer details, not production customer data.
+    const address = page.locator("#billingAddressLine1");
+    if (await address.isVisible().catch(() => false)) {
+      await address.fill("123 Test Street");
+      // Complete Stripe's visible address selection. Leaving its suggestions
+      // open keeps the address incomplete even when native validity is true.
+      const suggestion = page.getByText(/^123 Test St(?:reet)?\b/i).first();
+      // Stripe address suggestions include city/ZIP and arrive asynchronously.
+      // Do not require an exact text label; never submit with a pending popup.
+      try {
+        await suggestion.waitFor({ state: "visible", timeout: 8_000 });
+        await suggestion.click();
+      } catch (error) {
+        if (error?.name !== "TimeoutError") throw error;
+        await address.press("Escape");
+        await address.press("Tab");
+      }
+    }
+    const city = page.getByPlaceholder("City", { exact: true });
+    if (await city.isVisible().catch(() => false) && !(await city.inputValue())) await city.fill("New York");
+    const state = page.locator("#billingAdministrativeArea");
+    if (await state.isVisible().catch(() => false) && !(await state.inputValue())) await state.selectOption("NY");
     const postal = page.locator("#billingPostalCode");
-    if (await postal.isVisible().catch(() => false)) await postal.fill("10001");
+    if (await postal.isVisible().catch(() => false) && !(await postal.inputValue())) await postal.fill("10001");
 
-    await page.locator('[data-testid="hosted-payment-submit-button"], button.SubmitButton').first().click();
-    // The success page is the app, which is not running here; only reaching
-    // the URL matters, so wait for the navigation to commit and no further.
-    await page.waitForURL((u) => u.href.startsWith(successUrlPrefix), { timeout: 90_000, waitUntil: "commit" });
+    // Stripe Link label has multiple current variants. The disposable CI
+    // buyer must not opt into Link, which also adds a required phone field.
+    const saveForLater = page.getByRole("checkbox", { name: /Save my information/i });
+    if (await saveForLater.waitFor({ state: "visible", timeout: 3_000 }).then(() => true).catch((error) => {
+      if (error?.name !== "TimeoutError") throw error;
+      return false;
+    })) await saveForLater.uncheck();
+    // Explicit consent belongs to this generated CI buyer in Stripe test mode.
+    const terms = page.getByRole("checkbox", { name: /ScrollLibrary Terms/i });
+    if (await terms.isVisible().catch(() => false)) await terms.check();
+
+    const submit = page.locator('[data-testid="hosted-payment-submit-button"], button.SubmitButton').first();
+    await submit.click();
+    // The local receiver proves the return URL; application state is checked
+    // separately after the signed webhook has been processed.
+    const returned = (u) => u.href.startsWith(successUrlPrefix);
+    try {
+      await page.waitForURL(returned, { timeout: 15_000, waitUntil: "commit" });
+    } catch (error) {
+      // Hosted Checkout can discard a submit while address/tax state settles.
+      // Retry once only for this same, unpaid, open session and an idle form.
+      const sessionId = new URL(url).pathname.split("/").find((part) => part.startsWith("cs_test_"));
+      if (error.name !== "TimeoutError" || !sessionId ||
+          new URL(page.url()).hostname !== "checkout.stripe.com" ||
+          !(await submit.isVisible()) || !(await submit.isEnabled()) ||
+          await page.locator('[role="alert"]:visible').count()) throw error;
+      const session = await stripe("GET", `/checkout/sessions/${sessionId}`);
+      if (session.status !== "open" || session.payment_status === "paid") throw error;
+      console.log(`${label}: retrying the same unpaid open Checkout session once`);
+      await submit.click();
+      await page.waitForURL(returned, { timeout: 75_000, waitUntil: "commit" });
+    }
   } catch (error) {
     await page.screenshot({ path: `${EVIDENCE_DIR}/${label}-checkout-failure.png`, fullPage: true }).catch(() => {});
+    const fields = await page.locator("input, select").evaluateAll((elements) => elements.map((el) => ({
+      id: el.id, name: el.getAttribute("name"), placeholder: el.getAttribute("placeholder"),
+      required: el.required, valid: el.validity.valid, validation: el.validationMessage,
+    }))).catch(() => []);
+    writeFileSync(`${EVIDENCE_DIR}/${label}-checkout-fields.json`, JSON.stringify(fields, null, 2));
     throw error;
   } finally {
     await page.close();
@@ -503,7 +570,7 @@ await journey("P16", "Connect onboarding → account persisted → account.updat
   const creator = await createUser("payee");
   const started = await callFunction("stripe-connect-onboarding", creator, { action: "start", return_path: "/payout-profile" });
   if (started.status >= 500) {
-    throw new Error("stripe-connect-onboarding failed. If Stripe Connect is not enabled on this test account, enable it in the Stripe dashboard (test mode) and re-run.");
+    throw new Error(`stripe-connect-onboarding failed (${started.status}): ${JSON.stringify(started.body)}. Inspect the function logs before attributing this to Stripe Connect setup.`);
   }
   check(started.status === 200 && /^https:\/\/connect\.stripe\.com\//.test(started.body.onboarding_url ?? ""),
     "onboarding did not return a Stripe-hosted onboarding link", started.body);
@@ -536,6 +603,7 @@ await journey("EVT", "Every webhook event this run caused finished processing", 
 // ---------------------------------------------------------------------------
 
 await browser?.close();
+await new Promise((resolve) => returnServer.close(resolve));
 for (const undo of cleanup.reverse()) await undo().catch((e) => console.warn(`cleanup: ${e.message}`));
 
 const summary = {

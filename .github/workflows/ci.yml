@@ -70,6 +70,8 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - name: Reject destructive migrations in hardened migration era
         run: bun scripts/check-migration-safety.mjs
+      - name: Assert production smoke cannot declare commercial GA
+        run: node --test scripts/test-production-verification-evidence.mjs
 
   database-schema:
     name: Apply and lint Supabase schema
@@ -195,13 +197,13 @@ jobs:
           deno check supabase/functions/_shared/billing-customer.ts
       - name: Type-check critical financial Edge Functions
         run: |
-          deno check supabase/functions/create-checkout/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/create-checkout/index.ts
           deno check supabase/functions/create-billing-order-checkout/index.ts
-          deno check supabase/functions/customer-portal/index.ts
-          deno check supabase/functions/check-subscription/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/customer-portal/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/check-subscription/index.ts
           deno check supabase/functions/stripe-webhook/index.ts
           deno check supabase/functions/stripe-connect-onboarding/index.ts
-          deno check supabase/functions/create-book-checkout/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/create-book-checkout/index.ts
           deno check supabase/functions/admin-refund-purchase/index.ts
           deno check supabase/functions/settle-creator-payouts/index.ts
           deno check supabase/functions/creator-earnings-summary/index.ts
@@ -259,6 +261,7 @@ jobs:
       - name: Test financial alerting contract
         run: |
           deno test supabase/functions/_shared/observability_test.ts
+          deno test --config supabase/functions/deno.json supabase/functions/_shared/stripe-webhook-signature_test.ts
       - name: Pin chapter regeneration edit-intent and persistence contract
         run: node scripts/check-chapter-regeneration-contract.mjs
       - name: Pin assessment answer-key, scoring and evidence authority

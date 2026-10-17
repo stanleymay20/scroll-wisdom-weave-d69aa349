@@ -35,12 +35,29 @@ function explicitClientFlag(value: string | undefined): boolean {
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
-// Full commercial GA is independent from specialized-generation qualification.
-// It opens the paid/publishing surface, while book types such as academic,
-// technical, illustrated, children, comic, fiction, etc. still require the
-// separate empirical provider-qualification allow-list below.
+// Master commercial release hold. A master release decision must never activate
+// unqualified product journeys by itself. Each independent capability below
+// requires BOTH this master hold and its own explicit, default-OFF flag.
 export const COMMERCIAL_GA_ENABLED = explicitClientFlag(
   import.meta.env.VITE_COMMERCIAL_GA_ENABLED,
+);
+
+const commercialCapabilityEnabled = (value: string | undefined): boolean =>
+  COMMERCIAL_GA_ENABLED && explicitClientFlag(value);
+
+// Browser flags are presentation/route boundaries only. The matching Edge
+// Function GA flags remain authoritative and fail closed separately.
+const INDIVIDUAL_SUBSCRIPTION_CHECKOUT_ENABLED = commercialCapabilityEnabled(
+  import.meta.env.VITE_GA_INDIVIDUAL_SUBSCRIPTIONS_ENABLED,
+);
+const USAGE_ADDON_CHECKOUT_ENABLED = commercialCapabilityEnabled(
+  import.meta.env.VITE_GA_USAGE_ADDONS_ENABLED,
+);
+const TEAMS_SUBSCRIPTION_CHECKOUT_ENABLED = commercialCapabilityEnabled(
+  import.meta.env.VITE_GA_TEAMS_SUBSCRIPTIONS_ENABLED,
+);
+const PUBLISHING_SERVICE_CHECKOUT_ENABLED = commercialCapabilityEnabled(
+  import.meta.env.VITE_GA_PUBLISHING_SERVICES_ENABLED,
 );
 
 // Creator marketplace money movement has an additional dependency: verified
@@ -56,7 +73,7 @@ export const SPECIALIZED_AUTHORING_ENABLED = explicitClientFlag(
 
 export const FEATURES = {
   enableTTS: true,
-  enableAICovers: COMMERCIAL_GA_ENABLED,
+  enableAICovers: commercialCapabilityEnabled(import.meta.env.VITE_GA_AI_COVERS_ENABLED),
   enableBatchGeneration: false,
   enableElevenLabsTTS: false,
   // PMF-disabled features
@@ -74,19 +91,20 @@ export const FEATURES = {
   enableChapterVideo: !PMF_MODE,
   enableKnowledgeGraph: !PMF_MODE,
   enableStudyMusic: !PMF_MODE,
-  // Commercial GA is opened deliberately and independently from PMF-only
-  // experimental/study features. Backend financial/publication gates remain
-  // authoritative even when these browser surfaces are enabled.
-  enablePaidCheckout: COMMERCIAL_GA_ENABLED,
-  enableSubscriptionCheckout: COMMERCIAL_GA_ENABLED,
-  enableStripeConnect: MARKETPLACE_GA_ENABLED,
+  // Independent, explicit commercial authorizations. Do not collapse these
+  // into COMMERCIAL_GA_ENABLED, which is only a master kill switch.
+  enableSubscriptionCheckout: INDIVIDUAL_SUBSCRIPTION_CHECKOUT_ENABLED,
+  enableUsageAddonCheckout: USAGE_ADDON_CHECKOUT_ENABLED,
+  enableTeamsSubscriptionCheckout: TEAMS_SUBSCRIPTION_CHECKOUT_ENABLED,
+  enablePublishingServicesCheckout: PUBLISHING_SERVICE_CHECKOUT_ENABLED,
+  enableStripeConnect: MARKETPLACE_GA_ENABLED && explicitClientFlag(import.meta.env.VITE_GA_STRIPE_CONNECT_ENABLED),
   enableMarketplace: MARKETPLACE_GA_ENABLED,
   enableSpecializedAuthoring: SPECIALIZED_AUTHORING_ENABLED,
-  enableAdvancedAuthoring: COMMERCIAL_GA_ENABLED,
-  enableChapterRegeneration: COMMERCIAL_GA_ENABLED,
-  enableCustomCover: COMMERCIAL_GA_ENABLED,
-  enableExports: COMMERCIAL_GA_ENABLED,
-  enableEditorialPipeline: COMMERCIAL_GA_ENABLED,
-  enableReleaseScheduling: COMMERCIAL_GA_ENABLED,
-  enableCanonicalPublication: COMMERCIAL_GA_ENABLED,
+  enableAdvancedAuthoring: commercialCapabilityEnabled(import.meta.env.VITE_GA_ADVANCED_AUTHORING_ENABLED),
+  enableChapterRegeneration: commercialCapabilityEnabled(import.meta.env.VITE_GA_CHAPTER_REGENERATION_ENABLED),
+  enableCustomCover: commercialCapabilityEnabled(import.meta.env.VITE_GA_CUSTOM_COVER_ENABLED),
+  enableExports: commercialCapabilityEnabled(import.meta.env.VITE_GA_EXPORTS_ENABLED),
+  enableEditorialPipeline: commercialCapabilityEnabled(import.meta.env.VITE_GA_EDITORIAL_PIPELINE_ENABLED),
+  enableReleaseScheduling: commercialCapabilityEnabled(import.meta.env.VITE_GA_RELEASE_SCHEDULING_ENABLED),
+  enableCanonicalPublication: commercialCapabilityEnabled(import.meta.env.VITE_GA_CANONICAL_PUBLICATION_ENABLED),
 };

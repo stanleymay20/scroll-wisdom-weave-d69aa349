@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { verifyStripeWebhookEvent } from "../_shared/stripe-webhook-signature.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { payoutMethodForStatus, payoutStatusFromAccount } from "../_shared/stripe-connect.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -69,7 +70,7 @@ serve(async (req) => {
 
     let event: Stripe.Event;
     try {
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      event = await verifyStripeWebhookEvent(stripe, body, signature, webhookSecret);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
       logStep("Signature verification failed", { error: errorMessage });
@@ -695,12 +696,15 @@ serve(async (req) => {
         if (billingOrder) {
           const { data: priorOrderRefunds, error: priorOrderRefundsError } = await supabase
             .from("billing_order_refunds")
-            .select("amount_cents")
+            .select("amount_cents,stripe_refund_id")
             .eq("billing_order_id", billingOrder.id);
           if (priorOrderRefundsError) {
             throw new Error("Billing order prior refund lookup failed: " + priorOrderRefundsError.message);
           }
           const priorSubtotalRefunded = (priorOrderRefunds ?? [])
+            // This refund's existing allocation must not consume its own replay
+            // budget before the transactional writer checks idempotency.
+            .filter((row) => row.stripe_refund_id !== refund.id)
             .reduce((sum, row) => sum + Number(row.amount_cents ?? 0), 0);
           const refundSubtotal = await preTaxRefundAmount(
             refund,
@@ -749,13 +753,14 @@ serve(async (req) => {
 
       const { data: priorPurchaseRefunds, error: priorPurchaseRefundsError } = await supabase
         .from("creator_earnings_ledger")
-        .select("gross_cents")
+        .select("gross_cents,source_event_id")
         .eq("purchase_id", purchase.id)
         .eq("entry_type", "refund");
       if (priorPurchaseRefundsError) {
         throw new Error("Purchase prior refund lookup failed: " + priorPurchaseRefundsError.message);
       }
       const priorSubtotalRefunded = (priorPurchaseRefunds ?? [])
+        .filter((row) => row.source_event_id !== refund.id)
         .reduce((sum, row) => sum + Math.max(0, -Number(row.gross_cents ?? 0)), 0);
       const refundSubtotal = await preTaxRefundAmount(
         refund,
