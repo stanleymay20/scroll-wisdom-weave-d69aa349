@@ -75,15 +75,47 @@ requireText(usageInsights, "server-authoritative usage period is the UTC calenda
 requireText(usageInsights, "one-time usage packs reset at UTC month-end", "usage meter states add-on reset boundary");
 requireText(usageInsights, "unused add-on units do not roll over", "usage meter states non-rollover policy");
 
-// Commercial GA must be independently switchable from specialized-generation
-// qualification and from the old PMF-only experimental surface.
-requireText(clientConfig, "VITE_COMMERCIAL_GA_ENABLED", "independent commercial GA browser switch");
-requireText(clientConfig, "enablePaidCheckout: COMMERCIAL_GA_ENABLED", "commercial checkout browser gate");
-requireText(clientConfig, "enableExports: COMMERCIAL_GA_ENABLED", "commercial export browser gate");
-requireText(clientConfig, "enableCanonicalPublication: COMMERCIAL_GA_ENABLED", "commercial publication browser gate");
+// Commercial master is only a kill switch, never authorization to enable all
+// product areas together. Each individually qualified capability has an opt-in.
+requireText(clientConfig, "VITE_COMMERCIAL_GA_ENABLED", "default-off master commercial hold");
+requireText(clientConfig, "COMMERCIAL_GA_ENABLED && explicitClientFlag(value)", "master AND domain capability");
+for (const [env, property] of [
+  ["VITE_GA_INDIVIDUAL_SUBSCRIPTIONS_ENABLED", "enableSubscriptionCheckout: INDIVIDUAL_SUBSCRIPTION_CHECKOUT_ENABLED"],
+  ["VITE_GA_USAGE_ADDONS_ENABLED", "enableUsageAddonCheckout: USAGE_ADDON_CHECKOUT_ENABLED"],
+  ["VITE_GA_TEAMS_SUBSCRIPTIONS_ENABLED", "enableTeamsSubscriptionCheckout: TEAMS_SUBSCRIPTION_CHECKOUT_ENABLED"],
+  ["VITE_GA_PUBLISHING_SERVICES_ENABLED", "enablePublishingServicesCheckout: PUBLISHING_SERVICE_CHECKOUT_ENABLED"],
+  ["VITE_GA_AI_COVERS_ENABLED", "enableAICovers: commercialCapabilityEnabled"],
+  ["VITE_GA_ADVANCED_AUTHORING_ENABLED", "enableAdvancedAuthoring: commercialCapabilityEnabled"],
+  ["VITE_GA_CHAPTER_REGENERATION_ENABLED", "enableChapterRegeneration: commercialCapabilityEnabled"],
+  ["VITE_GA_CUSTOM_COVER_ENABLED", "enableCustomCover: commercialCapabilityEnabled"],
+  ["VITE_GA_EXPORTS_ENABLED", "enableExports: commercialCapabilityEnabled"],
+  ["VITE_GA_EDITORIAL_PIPELINE_ENABLED", "enableEditorialPipeline: commercialCapabilityEnabled"],
+  ["VITE_GA_RELEASE_SCHEDULING_ENABLED", "enableReleaseScheduling: commercialCapabilityEnabled"],
+  ["VITE_GA_CANONICAL_PUBLICATION_ENABLED", "enableCanonicalPublication: commercialCapabilityEnabled"],
+]) {
+  requireText(clientConfig, env, "independent GA opt-in: " + env);
+  requireText(clientConfig, property, "independent client domain binding: " + property);
+}
+for (const broad of [
+  "enablePaidCheckout: COMMERCIAL_GA_ENABLED",
+  "enableSubscriptionCheckout: COMMERCIAL_GA_ENABLED",
+  "enableExports: COMMERCIAL_GA_ENABLED",
+  "enableCanonicalPublication: COMMERCIAL_GA_ENABLED",
+  "enableAdvancedAuthoring: COMMERCIAL_GA_ENABLED",
+]) rejectText(clientConfig, broad, "unsafe master flag exposes unqualified product: " + broad);
 requireText(clientConfig, "enableSpecializedAuthoring: SPECIALIZED_AUTHORING_ENABLED", "specialized qualification remains independent");
 requireText(clientConfig, "VITE_MARKETPLACE_GA_ENABLED", "independent creator marketplace browser switch");
+requireText(clientConfig, "VITE_GA_STRIPE_CONNECT_ENABLED", "Connect UI not implied by marketplace display");
 requireText(clientConfig, "enableMarketplace: MARKETPLACE_GA_ENABLED", "marketplace UI gate");
+requireText(pricing, 'planTierKey === "prophet_tier" && !FEATURES.enableTeamsSubscriptionCheckout', "Teams plan fail-closed before server request");
+requireText(pricing, 'FEATURES.enablePublishingServicesCheckout', "publishing-service purchase independent CTA");
+requireText(pricing, 'FEATURES.enableUsageAddonCheckout', "usage-addon purchase independent CTA");
+requireText(pricing, 'const isPublishingService = Object.prototype.hasOwnProperty.call', "one-time SKU classified before checkout");
+requireText(pricing, 'const isUsageAddon = Object.prototype.hasOwnProperty.call', "one-time usage SKU classified before checkout");
+requireText(pricing, "Teams available after separate validation", "Teams unqualified UI honestly disabled");
+requireText(pricing, "KDP PDF and editorial tools require separate validation before use", "Pro plan claim truthful about gated tools");
+rejectText(pricing, "FEATURES.enablePaidCheckout", "generic one-time flag accidentally opens unqualified publishing checkout");
+rejectText(pricing, "KDP PDF + stronger publication editorial review", "unqualified KDP/editing in purchasable Pro plan");
 requireText(bookCheckout, "marketplacePaymentsEnabled()", "server marketplace payment gate");
 requireText(payoutSettlement, "marketplacePayoutsEnabled()", "independent server marketplace payout gate");
 requireText(payoutSettlement, "reserve_creator_payout", "marketplace payout database reservation");
@@ -185,4 +217,4 @@ requireText(voiceGate, '.from("subscriptions")', "voice quota resolves server su
 requireText(voiceGate, "current_period_end", "voice quota rejects expired local subscription periods");
 rejectText(voiceGate, "profile?.plan", "voice quota falls back to cached profile plan");
 
-console.log("Billing package contract: PASS (commercial GA separated; Teams fail-closed; authoritative entitlements; economic ladder metered; tax-aware checkout; UTC add-on validity aligned)");
+console.log("Billing package contract: PASS (independent commercial release switches; Teams fail-closed; authoritative entitlements; economic ladder metered; tax-aware checkout; UTC add-on validity aligned)");
