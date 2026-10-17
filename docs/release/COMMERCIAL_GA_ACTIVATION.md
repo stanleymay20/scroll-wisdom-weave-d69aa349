@@ -1,4 +1,4 @@
-# ScrollLibrary Full Commercial GA Activation
+# ScrollLibrary Controlled Commercial Activation
 
 This document is the production activation contract for ScrollLibrary's commercial surface.
 
@@ -6,9 +6,11 @@ This document is the production activation contract for ScrollLibrary's commerci
 
 Commercial GA is independent from specialized book-type qualification.
 
-Commercial GA may open subscriptions, usage packs, exports, ScrollLibrary Press
-publishing services, release scheduling, canonical publication, and organization/Teams
-workflows.
+The master commercial switch is a **kill switch**, never a blanket authorization.
+Creator/Pro subscriptions, usage packs, exports, ScrollLibrary Press services,
+editorial and publication tooling, and organization/Teams workflows each require
+a separate browser flag and their corresponding authoritative backend release gate.
+A qualified payment lifecycle does not qualify an unrelated production workflow.
 
 Creator marketplace commerce is a separate release domain because it additionally
 requires verified seller payout settlement. General commercial GA must never imply
@@ -68,10 +70,33 @@ targets and tracked fulfillment lifecycle.
 
 ### Browser build
 
-```
-VITE_COMMERCIAL_GA_ENABLED=true
+```dotenv
+# Global kill switch must remain OFF until a separately approved release.
+VITE_COMMERCIAL_GA_ENABLED=false
+
+# Per-domain, explicit approvals. Zero true values is the safe baseline.
+VITE_GA_INDIVIDUAL_SUBSCRIPTIONS_ENABLED=false
+VITE_GA_USAGE_ADDONS_ENABLED=false
+VITE_GA_TEAMS_SUBSCRIPTIONS_ENABLED=false
+VITE_GA_PUBLISHING_SERVICES_ENABLED=false
+VITE_GA_AI_COVERS_ENABLED=false
+VITE_GA_CUSTOM_COVER_ENABLED=false
+VITE_GA_ADVANCED_AUTHORING_ENABLED=false
+VITE_GA_CHAPTER_REGENERATION_ENABLED=false
+VITE_GA_EXPORTS_ENABLED=false
+VITE_GA_EDITORIAL_PIPELINE_ENABLED=false
+VITE_GA_RELEASE_SCHEDULING_ENABLED=false
+VITE_GA_CANONICAL_PUBLICATION_ENABLED=false
 VITE_MARKETPLACE_GA_ENABLED=false
+VITE_GA_STRIPE_CONNECT_ENABLED=false
 ```
+
+After an approved master activation, change only the flags for journeys whose
+exact deployed source, server switches and real customer/financial/provider
+acceptance gates are independently proven. In particular, Creator/Pro
+subscriptions may open while Teams, publishing services, PDF/KDP export and
+advanced authoring **remain OFF**. New paid purchases must still fail closed at
+the Edge Function boundary when their own authoritative server flags are OFF.
 
 Set `VITE_MARKETPLACE_GA_ENABLED=true` only after Stripe Connect onboarding,
 transfer/payout settlement, refund reversal, and seller payout reconciliation have
@@ -167,12 +192,17 @@ Do not turn on commercial browser flags until:
 5. Configure/verify merchant tax registrations.
 6. Run live-catalogue checkout in a non-charge test path and webhook read-back.
 7. Set server GA payment/publication switches only for proven domains; keep marketplace payment switch false.
-8. Set `VITE_COMMERCIAL_GA_ENABLED=true` and redeploy from exact main.
-9. Verify production pricing, checkout, entitlements, usage units, exports, publishing, refunds,
-   and Teams.
+8. Only after verified production release identity and domain-specific acceptance,
+   open `VITE_COMMERCIAL_GA_ENABLED=true` and the specific approved browser flag(s).
+   Keep all other browser flags false; never interpret one paid-domain pass as export,
+   publishing, Teams or advanced-authoring acceptance.
+9. Verify production pricing, checkout, entitlement and refunds only for the
+   domain(s) deliberately activated. Validate other domains independently before
+   switching on their corresponding flags.
 10. Verify creator payout settlement against a real test Connect account, then enable
    `GA_MARKETPLACE_PAYMENTS_ENABLED=true`, `GA_MARKETPLACE_PAYOUTS_ENABLED=true`,
-   and `VITE_MARKETPLACE_GA_ENABLED=true`; verify paid storefront sales and payout
+   and `VITE_MARKETPLACE_GA_ENABLED=true` (with the separate Stripe Connect
+   UI flag as applicable); verify paid storefront sales and payout
    settlement end to end.
 11. Release specialized book types only after provider qualification evidence.
 12. Activate stronger near-10/Press Certified marketing only after the corresponding
