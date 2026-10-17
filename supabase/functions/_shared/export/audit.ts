@@ -2,9 +2,10 @@
  * Export integrity audit writer (S4).
  *
  * Mechanical extraction from supabase/functions/export-book/index.ts.
- * Writes the immutable `exports` row plus a matching `authorship_audit_log`
- * entry. All fields, defaults, and non-fatal error handling are preserved
- * exactly — failures are logged via console.warn and never thrown.
+ * Writes the `exports` row and corresponding `authorship_audit_log` event.
+ * Returns independent proof of each write. Canonical published exports must
+ * not be delivered unless BOTH are acknowledged; draft exports preserve the
+ * historical best-effort behavior while reporting incomplete evidence.
  */
 
 export interface RecordExportEventOptions {
@@ -28,6 +29,7 @@ export interface RecordExportEventOptions {
 
 export interface RecordExportEventResult {
   exportEventId: string | null;
+  auditLogRecorded: boolean;
 }
 
 export async function recordExportEvent(
@@ -42,6 +44,7 @@ export async function recordExportEvent(
   } = opts;
 
   let exportEventId: string | null = null;
+  let auditLogRecorded = false;
 
   try {
     const integrityLevel = canonicalPublicationId ? "published_export" : "draft_export";
@@ -76,7 +79,7 @@ export async function recordExportEvent(
       console.warn("[EXPORT] exports insert failed (non-fatal):", expErr);
     } else if (expRow) {
       exportEventId = expRow.id;
-      await supabase.from("authorship_audit_log").insert({
+      const { error: auditError } = await supabase.from("authorship_audit_log").insert({
         work_id: canonicalWorkId,
         book_id: bookId,
         publication_id: canonicalPublicationId,
@@ -93,10 +96,15 @@ export async function recordExportEvent(
           renderer: canonicalRendererVersion || "legacy",
         },
       } as any);
+      if (auditError) {
+        console.warn("[EXPORT] authorship audit insert failed:", auditError);
+      } else {
+        auditLogRecorded = true;
+      }
     }
   } catch (e) {
     console.warn("[EXPORT] export event logging failed (non-fatal):", e);
   }
 
-  return { exportEventId };
+  return { exportEventId, auditLogRecorded };
 }

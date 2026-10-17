@@ -320,15 +320,18 @@ jobs:
         run: |
           # export-book starts its HTTP server when imported, so its renderer
           # tests need to bind a port; nothing else here needs a permission.
+          deno check --config supabase/functions/deno.json scripts/render-real-manuscript-interior-evidence.ts
           deno test --allow-net supabase/functions/export-book/_test.ts
           deno test supabase/functions/export-publication/index.test.ts
           deno test supabase/functions/_shared/__tests__/export-integrity.test.ts
           deno test supabase/functions/_shared/export/__tests__/s6a-extraction.test.ts
+          deno test supabase/functions/_shared/export/qualification_test.ts
       - name: Prove interior PDF embedded fonts and Unicode extraction
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y poppler-utils
           python3 scripts/test_pdf_font_evidence.py
+          python3 -m unittest discover -s scripts -p test_verify_real_manuscript_kdp.py -v
           deno run --config supabase/functions/deno.json --allow-net --allow-write=tmp/unicode-interior-evidence scripts/render-unicode-interior-evidence.ts tmp/unicode-interior-evidence
           python3 scripts/check-unicode-interior-evidence.py tmp/unicode-interior-evidence
       - name: Archive exact-head Unicode interior evidence
