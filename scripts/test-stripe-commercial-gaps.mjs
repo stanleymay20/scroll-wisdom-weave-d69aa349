@@ -281,9 +281,12 @@ async function payOnHostedCheckout(url, successPrefix, label) {
     const address = page.locator("#billingAddressLine1");
     if (await address.isVisible().catch(() => false)) {
       await address.fill("123 Test Street");
+      // Stripe Checkout can render either address autocomplete or plain manual
+      // fields depending on account/session/UI rollout. The suggestion is a
+      // convenience, not a payment invariant, so use it when present and fall
+      // through to the explicit city/state/postal fields when it is absent.
       const suggestion = page.getByText(/^123 Test St(?:reet)?$/i).first();
-      await suggestion.waitFor({ state: "visible", timeout: 10_000 });
-      await suggestion.click();
+      if (await suggestion.isVisible({ timeout: 1_500 }).catch(() => false)) await suggestion.click();
     }
     const city = page.getByPlaceholder("City", { exact: true });
     if (await city.isVisible().catch(() => false) && !(await city.inputValue())) await city.fill("New York");
