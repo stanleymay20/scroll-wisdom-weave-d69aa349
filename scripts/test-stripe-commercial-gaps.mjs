@@ -285,8 +285,14 @@ async function payOnHostedCheckout(url, successPrefix, label) {
       // fields depending on account/session/UI rollout. The suggestion is a
       // convenience, not a payment invariant, so use it when present and fall
       // through to the explicit city/state/postal fields when it is absent.
-      const suggestion = page.getByText(/^123 Test St(?:reet)?$/i).first();
-      if (await suggestion.isVisible({ timeout: 1_500 }).catch(() => false)) await suggestion.click();
+      const suggestion = page.getByText(/^123 Test St(?:reet)?\\b/i).first();
+      if (await suggestion.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await suggestion.click();
+      } else {
+        // Manual address path: dismiss optional autocomplete so Stripe's
+        // explicit city/state/ZIP fields remain available for validation.
+        await address.press("Tab");
+      }
     }
     const city = page.getByPlaceholder("City", { exact: true });
     if (await city.isVisible().catch(() => false) && !(await city.inputValue())) await city.fill("New York");
