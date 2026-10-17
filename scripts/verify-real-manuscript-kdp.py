@@ -137,7 +137,14 @@ def inspect_pdf(pdf, is_kdp, anchors, glyphs):
             "failure_count": report.get("failure_count", len(report.get("failures", []))),
             "pages": report.get("pages") if label == "geometry" else None,
             "minimum_inside_pt": report.get("minimum_inside_pt") if label == "geometry" else None,
-            "errors": report.get("failures", report.get("errors", []))[:50],
+            # Existing geometry checks include the failing text word. Strip
+            # manuscript values from archived evidence; retain location/code.
+            "errors": [
+                {"code": str(item.get("error", item.get("code", "CHECK_FAILURE"))),
+                 **({"page": item["page"]} if "page" in item else {})}
+                for item in report.get("failures", report.get("errors", []))[:50]
+                if isinstance(item, dict)
+            ],
         }
     code, extracted, _ = command(["pdftotext", "-layout", str(path), "-"])
     record["sampled_fidelity"] = (compare_extracted_text(anchors, glyphs, extracted) if code == 0
@@ -213,7 +220,12 @@ def main():
         # Do not write raw exception detail containing manuscript/path content.
         report = {"schema_version": 1, "local_automated_checks_passed": False,
                   "commercial_ga": "NO_GO", "error_code": type(error).__name__,
-                  "detail": str(error).split(":")[0][:90]}
+                  "detail": (
+                      str(error).split(":")[0][:90]
+                      if isinstance(error, ValueError)
+                      and re.fullmatch(r"[A-Z_]+(?:[A-Z_ ]+)?", str(error).split(":")[0])
+                      else "INPUT_OR_TOOL_ERROR"
+                  )}
         success = False
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
