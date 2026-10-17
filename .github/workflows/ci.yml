@@ -320,6 +320,7 @@ jobs:
         run: |
           # export-book starts its HTTP server when imported, so its renderer
           # tests need to bind a port; nothing else here needs a permission.
+          deno check --config supabase/functions/deno.json scripts/render-real-manuscript-interior-evidence.ts
           deno test --allow-net supabase/functions/export-book/_test.ts
           deno test supabase/functions/export-publication/index.test.ts
           deno test supabase/functions/_shared/__tests__/export-integrity.test.ts
