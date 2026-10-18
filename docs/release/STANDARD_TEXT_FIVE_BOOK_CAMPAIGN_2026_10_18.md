@@ -17,6 +17,10 @@ The fixed campaign corpus is `docs/release/standard-text-qualification-corpus.js
 
 Targets are **not** generated outcomes or estimates of provider tokens/billing.
 
+## Qualification tier scope
+
+The five-book corpus is **not runnable as a normal Free-tier cohort**: Free currently caps books at five chapters and one book/month, whereas these briefs require eight or ten chapters. Creator (`student` internally) has a 30-chapter-per-book ceiling and ten books/month; Pro (`premium`) has a 50-chapter ceiling. The campaign must use an independently verified, normal non-admin Creator or Pro route and record its provider model. An admin's elevated `prophet_tier` quota must not be mistaken for ordinary subscriber capabilities. The collector requires the actual `--tier` and the server-stamped job tier to match. Do **not** count a Creator or Pro campaign as proof of Free-tier quality.
+
 ## Explicit go/no-go before any provider charges
 
 1. Integrate the reviewed exact-head branch only after mandatory CI and operator sign-off; identify the source, backend and immutable frontend release using their independently verified hashes. A passing PR CI is not hosted deployment evidence.
