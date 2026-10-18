@@ -166,7 +166,7 @@ for (const bookId of bookIds) {
 
   const { data: chapters, error: chapterError } = await supabase
     .from("chapters")
-    .select("id,book_id,chapter_number,title,is_generated,content,version_number,created_at")
+    .select("id,book_id,chapter_number,title,is_generated,content,version_number,created_at,generation_outline")
     .eq("book_id", bookId)
     .order("chapter_number", { ascending: true });
 
