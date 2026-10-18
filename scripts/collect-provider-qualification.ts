@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { evaluateFreshCohortSample, validateCampaignContext } from "./qualification-cohort-provenance.mjs";
 import {
   QUALIFICATION_POLICIES,
   evaluateBookTypeQualification,
@@ -15,6 +16,7 @@ import {
 type ReviewEntry = {
   visualAssetGatePassed?: boolean;
   humanReview?: {
+    manuscriptSha256: string;
     reviewer: string;
     criticalIssues: number;
     dimensions: {
@@ -92,6 +94,12 @@ const bookType = flag("--type") as QualifiableBookType | undefined;
 const bookIds = flags("--book");
 const outputPath = flag("--output") || "provider-qualification-evidence.json";
 const reviewsPath = flag("--reviews");
+const cohortContext = validateCampaignContext({
+  releaseSha: flag("--release-sha"),
+  campaignStartedAt: flag("--campaign-start"),
+  qualificationTier: flag("--tier"),
+  bookType,
+});
 
 if (!bookType || !(bookType in QUALIFICATION_POLICIES)) {
   throw new Error(
@@ -141,11 +149,12 @@ const reviews: ReviewFile = reviewsPath
   : {};
 
 const samples: ProviderQualificationSample[] = [];
+const cohortFailures: Array<{ bookId: string; codes: string[] }> = [];
 
 for (const bookId of bookIds) {
   const { data: book, error: bookError } = await supabase
     .from("books")
-    .select("id,book_type,total_chapters")
+    .select("id,book_type,total_chapters,user_id,created_at")
     .eq("id", bookId)
     .maybeSingle();
 
@@ -157,7 +166,7 @@ for (const bookId of bookIds) {
 
   const { data: chapters, error: chapterError } = await supabase
     .from("chapters")
-    .select("id,chapter_number,title,is_generated,content,version_number")
+    .select("id,book_id,chapter_number,title,is_generated,content,version_number,created_at,generation_outline")
     .eq("book_id", bookId)
     .order("chapter_number", { ascending: true });
 
@@ -165,7 +174,7 @@ for (const bookId of bookIds) {
 
   const { data: job, error: jobError } = await supabase
     .from("generation_jobs")
-    .select("id,status,current_chapter,total_chapters,metadata,created_at")
+    .select("id,user_id,book_id,status,current_chapter,total_chapters,metadata,created_at")
     .eq("book_id", bookId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -202,6 +211,12 @@ for (const bookId of bookIds) {
     && Number.isFinite(Number(reliability.chapterFailures));
 
   const chapterRows = chapters || [];
+  const cohortBlockers = evaluateFreshCohortSample(cohortContext, {
+    book, chapters: chapterRows, job,
+  });
+  if (cohortBlockers.length) {
+    cohortFailures.push({ bookId, codes: cohortBlockers });
+  }
   const expectedChapters = numeric(book.total_chapters, chapterRows.length);
   const generatedChapters = chapterRows.filter(
     (chapter) => chapter.is_generated === true
@@ -237,6 +252,12 @@ for (const bookId of bookIds) {
   }
 
   const review = reviews.books?.[bookId] || {};
+  // Review evidence binds to the exact current ordered chapter content. A
+  // post-review edit invalidates the review until a person reassesses it.
+  const scopeHash = sha256(JSON.stringify(chapterRows.map((ch) => ({
+    chapter_number: ch.chapter_number, title: ch.title, content: ch.content,
+  }))));
+  const reviewCurrent = !!review.humanReview && review.humanReview.manuscriptSha256 === scopeHash;
   const contractViolations = chapterRows.flatMap((chapter) => {
     const chapterContent = typeof chapter.content === "string" ? chapter.content : "";
     if (!chapter.is_generated || !chapterContent.trim()) {
@@ -273,7 +294,7 @@ for (const bookId of bookIds) {
 
     return blockers;
   });
-  const specializedContractPassed = contractViolations.length === 0;
+  const specializedContractPassed = contractViolations.length === 0 && cohortBlockers.length === 0;
 
   const currentReady =
     job?.status === "completed"
@@ -340,9 +361,12 @@ for (const bookId of bookIds) {
         contractViolations.length
           ? `Contract 6 blockers: ${contractViolations.slice(0, 12).map((item) => `ch${item.chapter}:${item.code}`).join(", ")}`
           : null,
+        cohortBlockers.length ? `Cohort admission: ${cohortBlockers.join(", ")}` : null,
+        review.humanReview && !reviewCurrent
+          ? "Human review missing current manuscript scope SHA-256; historical/stale review rejected." : null,
       ].filter(Boolean).join(" | ") || undefined,
     },
-    humanReview: review.humanReview
+    humanReview: reviewCurrent
       ? (() => {
           const dimensions = review.humanReview!.dimensions;
           const values = [
@@ -368,6 +392,13 @@ const output = {
   schemaVersion: 2,
   generatedAt: new Date().toISOString(),
   bookType,
+  cohort: {
+    qualificationReleaseSha: cohortContext.releaseSha,
+    campaignStartedAt: cohortContext.campaignStartedAt,
+    qualificationTier: cohortContext.qualificationTier,
+    externallyVerifiedHostedRelease: false,
+    admissionFailures: cohortFailures,
+  },
   policy: QUALIFICATION_POLICIES[bookType],
   result,
   samples,

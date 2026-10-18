@@ -197,3 +197,25 @@ Deno.test("standard text is empirically qualified rather than treated as an unte
   assertEquals(result.humanReviewedSamples, 3);
 });
 
+
+Deno.test("five copies of one excellent book never qualify the generation route", () => {
+  const duplicates = Array.from({ length: 5 }, (_, index) => {
+    const sample = passingSample("text", 1, index < 3);
+    sample.sampleId = `unique-label-${index}`;
+    return sample;
+  });
+  const verdict = evaluateBookTypeQualification("text", duplicates);
+  assertEquals(verdict.qualified, false);
+  assert(verdict.blockers.includes("duplicate book ID in qualification cohort"));
+});
+
+Deno.test("five distinct books using a repeated corpus sample ID cannot qualify", () => {
+  const samples = Array.from({ length: 5 }, (_, index) => {
+    const sample = passingSample("text", index + 1, index < 3);
+    sample.sampleId = "replayed-corpus-brief";
+    return sample;
+  });
+  const verdict = evaluateBookTypeQualification("text", samples);
+  assertEquals(verdict.qualified, false);
+  assert(verdict.blockers.includes("duplicate sample ID in qualification cohort"));
+});

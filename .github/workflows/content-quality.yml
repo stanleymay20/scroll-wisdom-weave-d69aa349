@@ -24,6 +24,8 @@ jobs:
         run: node scripts/check-content-quality-standard.mjs
       - name: Validate any committed Standard Text human-review evidence
         run: node scripts/check-standard-text-human-review.mjs
+      - name: Reject pre-hardening cohorts and missing release provenance
+        run: node --test scripts/test-qualification-cohort-provenance.mjs
       - uses: denoland/setup-deno@v2
         with:
           deno-version: 2.9.6
