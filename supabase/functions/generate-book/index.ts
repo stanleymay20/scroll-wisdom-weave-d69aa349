@@ -512,7 +512,13 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
         // from an untrusted browser request. When unset, legacy jobs are
         // deliberately ineligible for a source-pinned qualification campaign.
         ...(Deno.env.get("QUALIFICATION_SOURCE_SHA")?.match(/^[a-f0-9]{40}$/)
-          ? { qualificationSourceSha: Deno.env.get("QUALIFICATION_SOURCE_SHA") }
+          ? {
+            qualificationSourceSha: Deno.env.get("QUALIFICATION_SOURCE_SHA"),
+            // Keep the actual authorization/model tier, not the admin's
+            // elevated quota limit. No tier gains quality status by inheritance.
+            qualificationTier: userPlan,
+            qualificationAdminBypass: isAdmin,
+          }
           : {}),
       },
     }).select('id').single();
