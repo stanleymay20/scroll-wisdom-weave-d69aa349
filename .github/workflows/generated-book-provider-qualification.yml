@@ -19,6 +19,15 @@ on:
           - children
           - comic
           - fiction
+      qualification_tier:
+        description: The actual non-admin customer entitlement tier used for generated books
+        required: true
+        type: choice
+        options:
+          - student
+          - premium
+          - free
+          - prophet_tier
       book_ids:
         description: Comma- or newline-separated qualification book UUIDs
         required: true
@@ -58,6 +67,7 @@ jobs:
         continue-on-error: true
         env:
           BOOK_TYPE: ${{ inputs.book_type }}
+          QUALIFICATION_TIER: ${{ inputs.qualification_tier }}
           CAMPAIGN_START: ${{ inputs.campaign_start }}
           EXPECTED_SOURCE_SHA: ${{ github.sha }}
           BOOK_IDS: ${{ inputs.book_ids }}
@@ -69,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          args=(--type "$BOOK_TYPE" --release-sha "$EXPECTED_SOURCE_SHA" --campaign-start "$CAMPAIGN_START" --output provider-qualification-evidence.json)
+          args=(--type "$BOOK_TYPE" --tier "$QUALIFICATION_TIER" --release-sha "$EXPECTED_SOURCE_SHA" --campaign-start "$CAMPAIGN_START" --output provider-qualification-evidence.json)
           normalized="$(printf '%s\n' "$BOOK_IDS" | tr ',' '\n')"
           found=0
 
