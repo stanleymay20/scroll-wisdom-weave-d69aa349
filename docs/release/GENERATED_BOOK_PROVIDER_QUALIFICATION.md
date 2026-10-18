@@ -100,6 +100,16 @@ Illustrated, Children, and Comic additionally require current rights and product
 
 Every mode now uses the same maximum **2%** chapter-attempt failure rate and **5%** regeneration rate. Visual and technical modes retain their additional specialized gates.
 
+## Fresh cohort and source identity (release-blocking)
+
+**Legacy books are regression fixtures, not fresh-generation evidence.** A read-only Lovable snapshot on 2026-10-18 found all 81 retained books created before 2026-09-29: 51 in December 2025, 28 in January 2026 and two in September 2026. There were no retained post-2026-09-29 books, generation jobs or exports. An `is_generated` flag by itself does not prove the source of generated prose.
+
+The provider collector now **requires** an exact candidate `--release-sha` and a UTC `--campaign-start`. Every candidate book, chapter and matching generation job must have been created after that timestamp; each job must reference the correct owner/book and contain a server-recorded `metadata.qualificationSourceSha` matching the intended release. Chapter numbers must be sequential. Duplicate book IDs or repeated sample IDs must not advance the five-book threshold. The campaign start cannot predate 2026-09-29.
+
+Before spending provider credits, the release owner must independently verify the Lovable-hosted source identity and the backend, configure `QUALIFICATION_SOURCE_SHA` to that 40-character SHA in the controlled environment, and approve a maximum test budget. `generate-book` writes this marker from the server's environment to newly created generation jobs, never from a browser field. Its absence blocks qualification. This is **necessary, not sufficient** provenance: an operator must still verify actual hosted code, artifacts and provider routing.
+
+Human reviews require `humanReview.manuscriptSha256`, computed from the current stored, chapter-number-ordered array using `sha256(JSON.stringify(chapters.map(ch => ({chapter_number: ch.chapter_number, title: ch.title, content: ch.content}))))`. A review with a missing or stale scope hash does not count, and a revision must be re-reviewed. Keep manuscript bytes and reviewer notes private.
+
 ## Reliability telemetry
 
 Qualification measures **chapter attempts**, not raw provider API calls.
@@ -167,6 +177,8 @@ export QUALIFICATION_SUPABASE_SECRET_KEY="<server-only-secret>"
 
 bun run qualification:collect -- \
   --type academic \
+  --release-sha <exact-40-hex-hosted-source> \
+  --campaign-start 2026-10-18T00:00:00Z \
   --book <book-uuid-1> \
   --book <book-uuid-2> \
   --book <book-uuid-3> \
