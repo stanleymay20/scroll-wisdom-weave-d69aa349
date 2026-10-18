@@ -508,6 +508,12 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
         targetChapterWords: wordCount,
         phase: "drafting",
         orchestrator: "server_worker",
+        // Server-configured qualifier only; never accept the release identity
+        // from an untrusted browser request. When unset, legacy jobs are
+        // deliberately ineligible for a source-pinned qualification campaign.
+        ...(Deno.env.get("QUALIFICATION_SOURCE_SHA")?.match(/^[a-f0-9]{40}$/)
+          ? { qualificationSourceSha: Deno.env.get("QUALIFICATION_SOURCE_SHA") }
+          : {}),
       },
     }).select('id').single();
 
