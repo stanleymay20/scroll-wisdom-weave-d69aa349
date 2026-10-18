@@ -7,7 +7,7 @@ import {
 
 const sha = "a".repeat(40);
 const campaignStartedAt = "2026-10-17T00:00:00Z";
-const context = { releaseSha: sha, campaignStartedAt };
+const context = { releaseSha: sha, campaignStartedAt, qualificationTier: "student", bookType: "text" };
 const id = "00000000-0000-4000-8000-000000000001";
 const user = "00000000-0000-4000-8000-000000000002";
 const instant = "2026-10-17T12:00:00Z";
@@ -15,7 +15,12 @@ const fixture = () => ({
   book: { id, user_id: user, created_at: instant },
   job: {
     id: "j1", book_id: id, user_id: user, created_at: instant,
-    metadata: { qualificationSourceSha: sha },
+    metadata: {
+      qualificationSourceSha: sha,
+      qualificationTier: "student",
+      qualificationAdminBypass: false,
+      model: "google/gemini-2.5-flash",
+    },
   },
   chapters: Array.from({ length: 8 }, (_, i) => ({
     book_id: id, chapter_number: i + 1, created_at: instant,
@@ -63,7 +68,28 @@ test("chapter replay, omission, and owner mixup are not accepted", () => {
 });
 
 test("missing context, pre-hardening campaign and future-start campaign fail closed", () => {
-  assert.throws(() => validateCampaignContext({ releaseSha: "unknown", campaignStartedAt }), /QUALIFICATION_RELEASE_SHA_REQUIRED/);
-  assert.throws(() => validateCampaignContext({ releaseSha: sha, campaignStartedAt: "2025-12-01T00:00:00Z" }), /CAMPAIGN_START_TIMESTAMP_INVALID/);
-  assert.throws(() => validateCampaignContext({ releaseSha: sha, campaignStartedAt: "2030-10-17T00:00:00Z" }), /CAMPAIGN_START_TIMESTAMP_INVALID/);
+  assert.throws(() => validateCampaignContext({ ...context, releaseSha: "unknown" }), /QUALIFICATION_RELEASE_SHA_REQUIRED/);
+  assert.throws(() => validateCampaignContext({ ...context, campaignStartedAt: "2025-12-01T00:00:00Z" }), /CAMPAIGN_START_TIMESTAMP_INVALID/);
+  assert.throws(() => validateCampaignContext({ ...context, campaignStartedAt: "2030-10-17T00:00:00Z" }), /CAMPAIGN_START_TIMESTAMP_INVALID/);
+});
+
+test("normal Free user cannot falsely qualify eight chapters under admin privileges", () => {
+  const cohort = fixture();
+  cohort.job.metadata.qualificationTier = "free";
+  cohort.job.metadata.model = "google/gemini-2.5-flash-lite";
+  cohort.job.metadata.qualificationAdminBypass = true;
+  const blockers = evaluateFreshCohortSample({
+    ...context, qualificationTier: "free",
+  }, cohort);
+  assert(blockers.includes("ADMIN_QUOTA_BYPASS_NOT_REPRESENTATIVE_OF_STANDARD_CUSTOMER"));
+  assert(blockers.includes("BOOK_EXCEEDS_QUALIFIED_TIER_CHAPTER_CAP"));
+});
+
+test("cross-tier book or missing model cannot inherit qualification", () => {
+  const cohort = fixture();
+  cohort.job.metadata.qualificationTier = "premium";
+  cohort.job.metadata.model = "";
+  const blockers = evaluateFreshCohortSample(context, cohort);
+  assert(blockers.includes("SERVER_RECORDED_TIER_OR_MODEL_MISSING_OR_MISMATCH"));
+  assert.throws(() => validateCampaignContext({ ...context, qualificationTier: "founder" }), /QUALIFICATION_TIER_REQUIRED/);
 });
