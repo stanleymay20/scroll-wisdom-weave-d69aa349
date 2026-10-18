@@ -24,6 +24,12 @@ const fixture = () => ({
   },
   chapters: Array.from({ length: 8 }, (_, i) => ({
     book_id: id, chapter_number: i + 1, created_at: instant,
+    generation_outline: { materialModelProvenance: {
+      version: "v1", plan: "student", route: "routine",
+      routeFloorModel: "google/gemini-2.5-flash",
+      materialModelRoute: [{ stage: "generation", model: "google/gemini-2.5-flash" }],
+      finalMaterialModel: "google/gemini-2.5-flash", recordedAt: instant,
+    } },
   })),
 });
 
@@ -78,6 +84,12 @@ test("normal Free user cannot falsely qualify eight chapters under admin privile
   cohort.job.metadata.qualificationTier = "free";
   cohort.job.metadata.model = "google/gemini-2.5-flash-lite";
   cohort.job.metadata.qualificationAdminBypass = true;
+  for (const ch of cohort.chapters) {
+    ch.generation_outline.materialModelProvenance.plan = "free";
+    ch.generation_outline.materialModelProvenance.routeFloorModel = "google/gemini-2.5-flash-lite";
+    ch.generation_outline.materialModelProvenance.materialModelRoute[0].model = "google/gemini-2.5-flash-lite";
+    ch.generation_outline.materialModelProvenance.finalMaterialModel = "google/gemini-2.5-flash-lite";
+  }
   const blockers = evaluateFreshCohortSample({
     ...context, qualificationTier: "free",
   }, cohort);
@@ -92,4 +104,26 @@ test("cross-tier book or missing model cannot inherit qualification", () => {
   const blockers = evaluateFreshCohortSample(context, cohort);
   assert(blockers.includes("SERVER_RECORDED_TIER_OR_MODEL_MISSING_OR_MISMATCH"));
   assert.throws(() => validateCampaignContext({ ...context, qualificationTier: "founder" }), /QUALIFICATION_TIER_REQUIRED/);
+});
+
+test("missing material-model provenance cannot certify even correctly labeled chapters", () => {
+  const cohort = fixture();
+  cohort.chapters[3].generation_outline = null;
+  const blockers = evaluateFreshCohortSample(context, cohort);
+  assert(blockers.includes("CHAPTER_MATERIAL_MODEL_PROVENANCE_MISSING_OR_BELOW_TIER"));
+});
+
+test("silent lower-model fallback cannot qualify a paid-tier whole-book sample", () => {
+  const cohort = fixture();
+  cohort.chapters[3].generation_outline.materialModelProvenance.materialModelRoute[0].model =
+    "google/gemini-2.5-flash-lite";
+  const blockers = evaluateFreshCohortSample(context, cohort);
+  assert(blockers.includes("CHAPTER_MATERIAL_MODEL_PROVENANCE_MISSING_OR_BELOW_TIER"));
+});
+
+test("stale model attestation is not current-campaign evidence", () => {
+  const cohort = fixture();
+  cohort.chapters[3].generation_outline.materialModelProvenance.recordedAt = "2026-01-01T00:00:00Z";
+  const blockers = evaluateFreshCohortSample(context, cohort);
+  assert(blockers.includes("CHAPTER_MATERIAL_MODEL_PROVENANCE_MISSING_OR_BELOW_TIER"));
 });
