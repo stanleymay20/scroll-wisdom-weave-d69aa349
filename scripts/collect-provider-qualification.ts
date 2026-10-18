@@ -97,6 +97,8 @@ const reviewsPath = flag("--reviews");
 const cohortContext = validateCampaignContext({
   releaseSha: flag("--release-sha"),
   campaignStartedAt: flag("--campaign-start"),
+  qualificationTier: flag("--tier"),
+  bookType,
 });
 
 if (!bookType || !(bookType in QUALIFICATION_POLICIES)) {
@@ -393,6 +395,7 @@ const output = {
   cohort: {
     qualificationReleaseSha: cohortContext.releaseSha,
     campaignStartedAt: cohortContext.campaignStartedAt,
+    qualificationTier: cohortContext.qualificationTier,
     externallyVerifiedHostedRelease: false,
     admissionFailures: cohortFailures,
   },
