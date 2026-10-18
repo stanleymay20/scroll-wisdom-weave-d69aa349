@@ -418,6 +418,14 @@ export function evaluateBookTypeQualification(
   }).length;
 
   const blockers: string[] = [];
+  // Sample count must represent independent books. The same book/job cannot
+  // be replayed under different sample IDs to satisfy the five-book gate.
+  if (new Set(relevant.map((sample) => sample.bookId)).size !== relevant.length) {
+    blockers.push("duplicate book ID in qualification cohort");
+  }
+  if (new Set(relevant.map((sample) => sample.sampleId)).size !== relevant.length) {
+    blockers.push("duplicate sample ID in qualification cohort");
+  }
   if (relevant.length < policy.minimumSamples) {
     blockers.push(`need at least ${policy.minimumSamples} complete provider samples; found ${relevant.length}`);
   }
