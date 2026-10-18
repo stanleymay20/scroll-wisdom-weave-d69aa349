@@ -182,6 +182,8 @@ jobs:
           mapfile -d '' entries < <(find . -type f -name '*.ts' -print0 | sort -z)
           test "${#entries[@]}" -gt 0
           deno install --config deno.json --entrypoint --lockfile-only --frozen "${entries[@]}"
+      - name: Compile provider qualification evidence collector without network credentials
+        run: bun build scripts/collect-provider-qualification.ts --target=bun --outdir tmp/provider-qualification-compile
       - name: Type-check shared Edge boundary and error tracking
         run: |
           deno check supabase/functions/_shared/error-tracking.ts
