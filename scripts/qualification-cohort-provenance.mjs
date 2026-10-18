@@ -7,6 +7,34 @@
 const RELEASE = /^[a-f0-9]{40}$/;
 const MIN_COHORT_START = Date.parse("2026-09-29T00:00:00Z");
 const CHAPTER_CAPS = Object.freeze({ free: 5, student: 30, premium: 50, prophet_tier: 100 });
+const MODEL_RANK = Object.freeze({
+  "google/gemini-2.5-flash-lite": 1,
+  "google/gemini-2.5-flash": 2,
+  "google/gemini-2.5-pro": 3,
+});
+const routineFloor = (tier) => tier === "free"
+  ? "google/gemini-2.5-flash-lite" : "google/gemini-2.5-flash";
+function stageHasModelFloor(stage, floor) {
+  return stage && typeof stage === "object"
+    && typeof stage.model === "string"
+    && typeof MODEL_RANK[stage.model] === "number"
+    && MODEL_RANK[stage.model] >= MODEL_RANK[floor];
+}
+function materialRoutePasses(row, tier, start) {
+  const data = row?.generation_outline?.materialModelProvenance;
+  if (!data || data.version !== "v1" || data.plan !== tier
+    || !["routine", "chief_editor"].includes(data.route)) return false;
+  const floor = data.route === "chief_editor" && ["premium", "prophet_tier"].includes(tier)
+    ? "google/gemini-2.5-pro" : routineFloor(tier);
+  if (data.routeFloorModel !== floor
+    || !Array.isArray(data.materialModelRoute)
+    || data.materialModelRoute.length === 0
+    || !data.materialModelRoute.every((stage) => stageHasModelFloor(stage, floor))
+    || !stageHasModelFloor({ model: data.finalMaterialModel }, floor)
+    || !Number.isFinite(instant(data.recordedAt))
+    || instant(data.recordedAt) < start) return false;
+  return true;
+}
 
 function instant(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T/.test(value)) return NaN;
@@ -42,7 +70,7 @@ export function evaluateFreshCohortSample(context, { book, chapters, job }) {
     blockers.push("SERVER_RECORDED_RELEASE_SHA_MISSING_OR_MISMATCH");
   }
   if (job?.metadata?.qualificationTier !== qualificationTier
-    || typeof job?.metadata?.model !== "string" || !job.metadata.model.trim()) {
+    || job?.metadata?.model !== routineFloor(qualificationTier)) {
     blockers.push("SERVER_RECORDED_TIER_OR_MODEL_MISSING_OR_MISMATCH");
   }
   if (bookType === "text" && job?.metadata?.qualificationAdminBypass !== false) {
@@ -65,6 +93,9 @@ export function evaluateFreshCohortSample(context, { book, chapters, job }) {
     if (new Set(chapterNumbers).size !== chapterNumbers.length
       || chapterNumbers.some((n, i) => n !== i + 1)) {
       blockers.push("CHAPTER_NUMBERS_NOT_SEQUENTIAL");
+    }
+    if (chapters.some((row) => !materialRoutePasses(row, qualificationTier, start))) {
+      blockers.push("CHAPTER_MATERIAL_MODEL_PROVENANCE_MISSING_OR_BELOW_TIER");
     }
     for (const row of chapters) {
       const time = instant(row.created_at);
