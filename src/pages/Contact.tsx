@@ -54,7 +54,7 @@ export default function Contact() {
     const result = contactSchema.safeParse(form);
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
-      result.error.errors.forEach((err) => {
+      result.error.issues.forEach((err) => {
         if (err.path[0]) {
           fieldErrors[err.path[0] as string] = err.message;
         }
@@ -62,7 +62,7 @@ export default function Contact() {
       setErrors(fieldErrors);
       toast({
         title: "Validation Error",
-        description: result.error.errors[0]?.message || "Please check your input",
+        description: result.error.issues[0]?.message || "Please check your input",
         variant: "destructive",
       });
       return;

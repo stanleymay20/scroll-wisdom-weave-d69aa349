@@ -1,9 +1,10 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { resolveSupabaseBuildUrl } from "./scripts/supabase-build-config.mjs";
 import { execFileSync } from "node:child_process";
 import type { Plugin } from "vite";
 import { resolveBuildCommit, resolveProductionBuildCommit } from "./scripts/build-commit.mjs";
@@ -41,6 +42,13 @@ const GA_PWA_ENABLED = false;
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
+  // Hosted builds can omit the URL even when the public key is configured.
+  // Resolve the canonical public endpoint at build time, never from user input.
+  const env = loadEnv(mode, process.cwd(), 'VITE_');
+  const supabaseUrl = resolveSupabaseBuildUrl(
+    process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL,
+    readFileSync(new URL('./supabase/config.toml', import.meta.url), 'utf8'),
+  );
   const buildTime = process.env.BUILD_TIME ?? new Date().toISOString();
   const { commit, source: commitSource } = mode === "production" ? resolveProductionBuildCommit() : resolveBuildCommit();
   const source = computeSourceFingerprint();
@@ -51,6 +59,7 @@ export default defineConfig(({ mode }) => {
 
   return ({
   define: {
+    "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
     __BUILD_TIME__: JSON.stringify(buildTime),
     __BUILD_ID__: JSON.stringify(buildId),
   },

@@ -74,6 +74,8 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
+        isRecoveryRef.current = true;
+        modeRef.current = "reset-password";
         setMode("reset-password");
         setAuthError(null);
         return;
@@ -355,7 +357,11 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
         const { error } = await withTransientRetry(() => supabase.auth.updateUser({ password: safeNewPassword }));
         if (error) throw error;
         toast({ title: "Password updated!", description: "You can now sign in with your new password." });
-        await supabase.auth.signOut();
+        const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+        if (signOutError) throw signOutError;
+        isRecoveryRef.current = false;
+        modeRef.current = "login";
+        window.history.replaceState(window.history.state, "", window.location.pathname);
         setMode("login");
       }
     } catch (error: any) {

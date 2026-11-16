@@ -15,7 +15,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!user) {
-    return <Navigate to="/auth" state={{ redirectTo: location.pathname }} replace />;
+    return <Navigate to="/auth" state={{ redirectTo: location.pathname + location.search + location.hash }} replace />;
   }
 
   return <>{children}</>;

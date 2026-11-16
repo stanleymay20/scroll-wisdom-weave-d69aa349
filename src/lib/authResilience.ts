@@ -82,7 +82,11 @@ export async function withTransientRetry<T>(
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
-      return await operation();
+      const result = await operation();
+      // Supabase normally resolves with { error }; it does not reject the promise.
+      if (result && typeof result === 'object' && 'error' in result &&
+          result.error && isTransientAuthError(result.error)) throw result.error;
+      return result;
     } catch (error) {
       lastError = error;
       if (!isTransientAuthError(error) || attempt === retries) {

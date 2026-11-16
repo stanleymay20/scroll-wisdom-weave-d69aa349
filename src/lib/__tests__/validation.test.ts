@@ -5,9 +5,16 @@ import {
   emailSchema,
   passwordSchema,
   VALIDATION_LIMITS,
+  validateInput,
 } from "@/lib/validation";
 
 describe("validation", () => {
+  it("returns readable validation errors after the Zod upgrade", () => {
+    expect(validateInput(passwordSchema, "short")).toEqual({
+      success: false, errors: ["Password must be at least 6 characters"],
+    });
+  });
+
   describe("sanitizeString", () => {
     it("trims whitespace and encodes HTML entities", () => {
       expect(sanitizeString("  <script>alert('x')</script>  ")).toBe(
