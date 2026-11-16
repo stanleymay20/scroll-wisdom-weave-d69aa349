@@ -198,7 +198,7 @@ jobs:
           deno check supabase/functions/create-checkout/index.ts
           deno check supabase/functions/create-billing-order-checkout/index.ts
           deno check supabase/functions/customer-portal/index.ts
-          deno check supabase/functions/check-subscription/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/check-subscription/index.ts
           deno check supabase/functions/stripe-webhook/index.ts
           deno check supabase/functions/stripe-connect-onboarding/index.ts
           deno check supabase/functions/create-book-checkout/index.ts
