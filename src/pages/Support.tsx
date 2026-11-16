@@ -58,7 +58,7 @@ export default function Support() {
     const result = supportSchema.safeParse(contactForm);
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
-      result.error.errors.forEach((err) => {
+      result.error.issues.forEach((err) => {
         if (err.path[0]) {
           fieldErrors[err.path[0] as string] = err.message;
         }
@@ -66,7 +66,7 @@ export default function Support() {
       setErrors(fieldErrors);
       toast({
         title: t('support.validationError'),
-        description: result.error.errors[0]?.message || t('support.checkInput'),
+        description: result.error.issues[0]?.message || t('support.checkInput'),
         variant: "destructive",
       });
       return;
