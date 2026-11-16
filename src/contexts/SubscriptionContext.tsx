@@ -43,16 +43,27 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const lastFetchRef = useRef<number>(0);
   const userRef = useRef<User | null>(null);
   const FETCH_COOLDOWN = 30000;
+  const authRevisionRef = useRef(0);
+  const requestRef = useRef(0);
+  const mountedRef = useRef(false);
+  const inFlightRef = useRef<Promise<void> | null>(null);
 
   const resetAnonymousState = useCallback(() => {
     setUser(null);
     userRef.current = null;
+    authRevisionRef.current += 1;
+    requestRef.current += 1;
+    lastFetchRef.current = 0;
+    inFlightRef.current = null;
     setTier('free');
     setSubscriptionEnd(null);
+    setDailyLimitInfo({ dailyBookCount: 0, lastBookDate: null, canGenerateToday: true });
+    setTtsMinutesUsed(0);
     setIsLoading(false);
   }, []);
 
   const checkDailyLimits = useCallback(async (userId: string) => {
+    const revision = authRevisionRef.current;
     try {
       const { data: profile } = await supabase
         .from('profiles')
@@ -60,7 +71,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         .or(`user_id.eq.${userId},id.eq.${userId}`)
         .maybeSingle();
 
-      if (profile) {
+      if (mountedRef.current && authRevisionRef.current === revision && userRef.current?.id === userId && profile) {
         const currentMonth = new Date().toISOString().slice(0, 7);
         const lastDate = profile.last_book_date;
         const lastMonth = lastDate ? lastDate.slice(0, 7) : null;
@@ -79,6 +90,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const checkTTSUsage = useCallback(async (userId: string) => {
+    const revision = authRevisionRef.current;
     try {
       const currentMonth = new Date().toISOString().slice(0, 7);
 
@@ -89,6 +101,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         .eq('month', currentMonth)
         .maybeSingle();
 
+      if (!mountedRef.current || authRevisionRef.current !== revision || userRef.current?.id !== userId) return;
       if (data) {
         setTtsMinutesUsed(data.minutes_used);
       } else {
@@ -99,138 +112,100 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Keep userRef in sync with user state (avoids stale closures in checkSubscription)
-  useEffect(() => { userRef.current = user; }, [user]);
-
+  // Identity comes only from auth events/bootstrap. Billing cannot sign a user in or out.
   const checkSubscription = useCallback(async (force = false) => {
+    const currentUser = userRef.current;
+    if (!currentUser || !mountedRef.current) return;
+    if (inFlightRef.current) return inFlightRef.current;
     const now = Date.now();
-    if (!force && now - lastFetchRef.current < FETCH_COOLDOWN) {
-      return;
-    }
+    if (!force && now - lastFetchRef.current < FETCH_COOLDOWN) return;
     lastFetchRef.current = now;
+    const revision = authRevisionRef.current;
+    const request = ++requestRef.current;
+    const isCurrent = () => mountedRef.current && authRevisionRef.current === revision &&
+      requestRef.current === request && userRef.current?.id === currentUser.id;
+    const session = { user: currentUser };
+    const work = (async () => {
+      try {
+        const profilePromise = withTransientRetry(() => Promise.resolve(
+          supabase
+            .from('profiles')
+            .select('daily_book_count, last_book_date, plan')
+            .or(`user_id.eq.${session.user.id},id.eq.${session.user.id}`)
+            .maybeSingle()
+            .then((res) => {
+              if (res.error && isTransientAuthError(res.error)) throw res.error;
+              return res;
+            })
+        ), 2, 600).catch((err) => ({ data: null, error: err as any }));
 
-    try {
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError) {
-        if (isTransientAuthError(sessionError)) {
-          console.warn('Transient getSession() error during subscription check; preserving auth state');
-          setIsLoading(false);
-          return;
-        }
-
-        console.warn('Session lookup failed during subscription check:', getErrorMessageText(sessionError));
-        // Only reset if this is a forced (initial) check. Periodic checks should preserve state.
-        if (force) resetAnonymousState();
-        else setIsLoading(false);
-        return;
-      }
-
-      if (!session?.user) {
-        // CRITICAL FIX: If we already have a user in state, don't reset on periodic checks.
-        // getSession() can return null transiently after background/tab switch before
-        // autoRefreshToken kicks in. Only reset on forced bootstrap when we truly have no session.
-        if (!force) {
-          // Attempt a proactive refresh before giving up
-          const { data: refreshData } = await supabase.auth.refreshSession();
-          if (refreshData?.session?.user) {
-            setUser((prev) => (prev?.id === refreshData.session!.user.id ? prev : refreshData.session!.user));
-            setIsLoading(false);
-            // Continue to subscription check below won't work since we need to re-fetch.
-            // Just return — next interval will pick it up.
-            return;
-          }
-          // If refresh also failed and we have an existing user, preserve state
-          if (userRef.current) {
-            console.warn('Periodic check: no session but user exists in state — preserving');
-            setIsLoading(false);
-            return;
-          }
-        }
-        resetAnonymousState();
-        return;
-      }
-
-      setUser((prev) => (prev?.id === session.user.id ? prev : session.user));
-
-      const profilePromise = withTransientRetry(() => Promise.resolve(
-        supabase
-          .from('profiles')
-          .select('daily_book_count, last_book_date, plan')
-          .or(`user_id.eq.${session.user.id},id.eq.${session.user.id}`)
-          .maybeSingle()
-          .then((res) => {
+        const subPromise = withTransientRetry(() => Promise.resolve(
+          supabase.functions.invoke('check-subscription').then((res) => {
             if (res.error && isTransientAuthError(res.error)) throw res.error;
             return res;
           })
-      ), 2, 600).catch((err) => ({ data: null, error: err as any }));
+        ), 2, 600).catch((err) => ({ data: null, error: err as any }));
 
-      const subPromise = withTransientRetry(() => Promise.resolve(
-        supabase.functions.invoke('check-subscription').then((res) => {
-          if (res.error && isTransientAuthError(res.error)) throw res.error;
-          return res;
-        })
-      ), 2, 600).catch((err) => ({ data: null, error: err as any }));
+        const [profileResult, subResult] = await Promise.all([profilePromise, subPromise]);
 
-      const [profileResult, subResult] = await Promise.all([profilePromise, subPromise]);
+        if (!isCurrent()) return;
 
-      if (profileResult.error) {
-        console.warn('Profile fetch failed during subscription check:', getErrorMessageText(profileResult.error));
-      }
+        if (profileResult.error) {
+          console.warn('Profile fetch failed during subscription check:', getErrorMessageText(profileResult.error));
+        }
 
-      const profileData = profileResult.data;
-      if (profileData) {
-        const currentMonth = new Date().toISOString().slice(0, 7);
-        const lastDate = profileData.last_book_date;
-        const lastMonth = lastDate ? lastDate.slice(0, 7) : null;
-        const count = lastMonth === currentMonth ? (profileData.daily_book_count || 0) : 0;
+        const profileData = profileResult.data;
+        if (profileData) {
+          const currentMonth = new Date().toISOString().slice(0, 7);
+          const lastDate = profileData.last_book_date;
+          const lastMonth = lastDate ? lastDate.slice(0, 7) : null;
+          const count = lastMonth === currentMonth ? (profileData.daily_book_count || 0) : 0;
 
-        setDailyLimitInfo({
-          dailyBookCount: count,
-          lastBookDate: lastDate,
-          canGenerateToday: count < LAUNCH_MODE_CONFIG.freeBookLimit,
-        });
-      }
+          setDailyLimitInfo({
+            dailyBookCount: count,
+            lastBookDate: lastDate,
+            canGenerateToday: count < LAUNCH_MODE_CONFIG.freeBookLimit,
+          });
+        }
 
-      void checkTTSUsage(session.user.id);
+        void checkTTSUsage(session.user.id);
 
-      const { data: subData, error: subError } = subResult;
-      if (subError) {
-        if (isTransientAuthError(subError)) {
-          console.warn('Transient subscription check failure; falling back to profile plan');
+        const { data: subData, error: subError } = subResult;
+        if (subError) {
+          if (isTransientAuthError(subError)) {
+            console.warn('Transient subscription check failure; falling back to profile plan');
+          } else {
+            console.error('Error checking subscription:', subError);
+          }
+          if (profileData?.plan) {
+            setTier(profileData.plan as SubscriptionTier);
+          }
+          return;
+        }
+
+        if (subData?.subscribed) {
+          const detectedTier = subData.product_id
+            ? getTierFromProductId(subData.product_id)
+            : (subData.tier as SubscriptionTier) || 'free';
+          setTier(detectedTier);
+          setSubscriptionEnd(subData.subscription_end);
         } else {
-          console.error('Error checking subscription:', subError);
+          setTier((profileData?.plan as SubscriptionTier) || 'free');
+          setSubscriptionEnd(null);
         }
-        if (profileData?.plan) {
-          setTier(profileData.plan as SubscriptionTier);
+      } catch (error) {
+        if (isTransientAuthError(error)) {
+          console.warn('Transient subscription check error; preserving auth state');
+        } else {
+          console.error('Subscription check error:', error);
         }
-        setIsLoading(false);
-        return;
+      } finally {
+        if (isCurrent()) inFlightRef.current = null;
       }
-
-      if (subData?.subscribed) {
-        const detectedTier = subData.product_id
-          ? getTierFromProductId(subData.product_id)
-          : (subData.tier as SubscriptionTier) || 'free';
-        setTier(detectedTier);
-        setSubscriptionEnd(subData.subscription_end);
-      } else {
-        setTier((profileData?.plan as SubscriptionTier) || 'free');
-        setSubscriptionEnd(null);
-      }
-    } catch (error) {
-      if (isTransientAuthError(error)) {
-        console.warn('Transient subscription check error; preserving auth state');
-      } else {
-        console.error('Subscription check error:', error);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [checkTTSUsage, resetAnonymousState]);
+    })();
+    inFlightRef.current = work;
+    return work;
+  }, [checkTTSUsage]);
 
   const incrementDailyBookCount = useCallback(async () => {
     if (!user) return;
@@ -250,169 +225,70 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-
-    // MISSION AUTH-1: Simplified bootstrap — trust onAuthStateChange as primary,
-    // use getSession() only to seed initial state, skip getUser() server call
-    // which was causing spurious logouts on transient failures.
-    const bootstrapAuth = async () => {
-      try {
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession();
-
-        if (error) {
-          if (isTransientAuthError(error)) {
-            console.warn('Transient bootstrap session error; preserving auth state');
-            if (mounted) setIsLoading(false);
-            return;
-          }
-          // Non-transient error — try refresh before resetting
-          const { data: refreshData } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null } }));
-          if (mounted) {
-            if (refreshData?.session?.user) {
-              setUser(refreshData.session.user);
-              void checkSubscription(true);
-            } else {
-              resetAnonymousState();
-            }
-          }
-          return;
-        }
-
-        if (!session?.user) {
-          // No session locally — try a refresh in case only the access token expired.
-          // The refresh token persists in localStorage and can recover the session.
-          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null }, error: null as any }));
-
-          if (refreshError && isTransientAuthError(refreshError)) {
-            // Network blip during refresh — keep loading state false but DO NOT log out.
-            console.warn('Transient refresh error at bootstrap; preserving auth state');
-            if (mounted) setIsLoading(false);
-            return;
-          }
-
-          if (mounted) {
-            if (refreshData?.session?.user) {
-              setUser(refreshData.session.user);
-              void checkSubscription(true);
-            } else {
-              resetAnonymousState();
-            }
-          }
-          return;
-        }
-
-        // Trust the local session. Supabase's autoRefreshToken will handle
-        // expired access tokens transparently. No getUser() server call needed
-        // at bootstrap — it was the #1 cause of spurious logouts.
-        if (mounted) {
-          setUser(session.user);
-          void checkSubscription(true);
-        }
-      } catch (error) {
-        if (isTransientAuthError(error)) {
-          console.warn('Network error during bootstrap — keeping existing session');
-        } else {
-          console.error('Unexpected bootstrap auth error:', error);
-        }
-
-        if (mounted) {
-          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
-          if (session?.user) {
-            setUser(session.user);
-            void checkSubscription(true);
-          } else {
-            resetAnonymousState();
-          }
-        }
-      }
-    };
-
-    void bootstrapAuth();
-
-    // MISSION AUTH-2: onAuthStateChange is the single source of truth for auth events.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    mountedRef.current = true;
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const acceptSession = (nextUser: User | null) => {
       if (!mounted) return;
-
-      if (event === 'SIGNED_OUT') {
+      if (!nextUser) {
         resetAnonymousState();
         return;
       }
-
-      if (event === 'TOKEN_REFRESHED' && !session) {
-        // Refresh event without session — check local store before giving up
-        setTimeout(async () => {
-          const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
-          if (!mounted) return;
-
-          if (data.session?.user) {
-            setUser((prev) => (prev?.id === data.session?.user?.id ? prev : data.session.user));
-            setTimeout(() => void checkSubscription(true), 0);
-          } else {
-            // CRITICAL: Do NOT reset user here. Preserve existing state.
-            console.warn('TOKEN_REFRESHED yielded no session; preserving current auth state');
-            setIsLoading(false);
-          }
-        }, 250);
-        return;
+      if (userRef.current?.id !== nextUser.id) {
+        resetAnonymousState();
       }
-
-      if (!session?.user) {
-        // For INITIAL_SESSION or other events without session: preserve existing user state.
-        // Only setIsLoading(false) so the UI stops showing loading spinner.
+      userRef.current = nextUser;
+      setUser(nextUser);
+      // Protected routes must not wait on profiles, Stripe, or usage requests.
+      setIsLoading(false);
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        if (mounted) void checkSubscription(true);
+      }, 0);
+      timers.add(timer);
+    };
+    // Subscribe before reading: a late bootstrap must never resurrect a signed-out user.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      authRevisionRef.current += 1;
+      requestRef.current += 1;
+      inFlightRef.current = null;
+      if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION' || session?.user) {
+        acceptSession(session?.user ?? null);
+      }
+    });
+    const bootstrapRevision = authRevisionRef.current;
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted || authRevisionRef.current !== bootstrapRevision) return;
+      if (error) {
+        console.warn('Initial session lookup failed:', getErrorMessageText(error));
         setIsLoading(false);
         return;
       }
-
-      setUser((prev) => (prev?.id === session.user.id ? prev : session.user));
-      setTimeout(() => void checkSubscription(true), 0);
+      acceptSession(data.session?.user ?? null);
+    }).catch((error: unknown) => {
+      if (!mounted || authRevisionRef.current !== bootstrapRevision) return;
+      console.warn('Initial session lookup failed:', getErrorMessageText(error));
+      setIsLoading(false);
     });
 
-    // MISSION AUTH-2: Proactive session refresh on tab visibility change.
-    // When user returns to the tab, refresh the token to prevent stale-session logouts.
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        supabase.auth.getSession().then(async ({ data: { session } }) => {
-          if (!mounted) return;
-          if (session?.user) {
-            setUser((prev) => (prev?.id === session.user.id ? prev : session.user));
-            return;
-          }
-          // No session in memory — proactively refresh before assuming logout.
-          const { data: refreshData } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null } }));
-          if (!mounted) return;
-          if (refreshData?.session?.user) {
-            setUser((prev) => (prev?.id === refreshData.session!.user.id ? prev : refreshData.session!.user));
-          }
-          // If refresh also failed, do nothing — preserve existing state.
-        }).catch(() => {
-          // Network error on tab restore — do nothing, preserve state
-        });
-      }
+    // The SDK owns token refresh and cross-tab auth. These hooks refresh billing only.
+    const recheck = () => {
+      if (document.visibilityState === 'visible') void checkSubscription(false);
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // PERSIST-FOREVER: proactively recover session when network returns.
-    const handleOnline = () => {
-      supabase.auth.refreshSession().then(({ data }) => {
-        if (!mounted) return;
-        if (data?.session?.user) {
-          setUser((prev) => (prev?.id === data.session!.user.id ? prev : data.session!.user));
-          void checkSubscription(true);
-        }
-      }).catch(() => { /* preserve state */ });
-    };
-    window.addEventListener('online', handleOnline);
-
+    document.addEventListener('visibilitychange', recheck);
+    window.addEventListener('online', recheck);
     const interval = setInterval(() => void checkSubscription(false), 300000);
-
     return () => {
       mounted = false;
+      mountedRef.current = false;
+      authRevisionRef.current += 1;
+      requestRef.current += 1;
+      inFlightRef.current = null;
       subscription.unsubscribe();
+      timers.forEach(clearTimeout);
       clearInterval(interval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', recheck);
+      window.removeEventListener('online', recheck);
     };
   }, [checkSubscription, resetAnonymousState]);
 
