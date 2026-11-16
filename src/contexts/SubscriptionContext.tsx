@@ -47,6 +47,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const requestRef = useRef(0);
   const mountedRef = useRef(false);
   const inFlightRef = useRef<Promise<void> | null>(null);
+  const queuedCheckRef = useRef<Promise<void> | null>(null);
 
   const resetAnonymousState = useCallback(() => {
     setUser(null);
@@ -55,6 +56,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     requestRef.current += 1;
     lastFetchRef.current = 0;
     inFlightRef.current = null;
+    queuedCheckRef.current = null;
     setTier('free');
     setSubscriptionEnd(null);
     setDailyLimitInfo({ dailyBookCount: 0, lastBookDate: null, canGenerateToday: true });
@@ -113,10 +115,22 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Identity comes only from auth events/bootstrap. Billing cannot sign a user in or out.
-  const checkSubscription = useCallback(async (force = false) => {
+  const checkSubscription = useCallback(async (force = false): Promise<void> => {
     const currentUser = userRef.current;
     if (!currentUser || !mountedRef.current) return;
-    if (inFlightRef.current) return inFlightRef.current;
+    if (inFlightRef.current) {
+      if (!force) return inFlightRef.current;
+      if (!queuedCheckRef.current) {
+        const revision = authRevisionRef.current;
+        const queued = inFlightRef.current.then(async () => {
+          if (!mountedRef.current || authRevisionRef.current !== revision) return;
+          if (queuedCheckRef.current === queued) queuedCheckRef.current = null;
+          await checkSubscription(true);
+        });
+        queuedCheckRef.current = queued;
+      }
+      return queuedCheckRef.current;
+    }
     const now = Date.now();
     if (!force && now - lastFetchRef.current < FETCH_COOLDOWN) return;
     lastFetchRef.current = now;
@@ -252,6 +266,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       authRevisionRef.current += 1;
       requestRef.current += 1;
       inFlightRef.current = null;
+      queuedCheckRef.current = null;
       if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION' || session?.user) {
         acceptSession(session?.user ?? null);
       }
@@ -284,6 +299,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       authRevisionRef.current += 1;
       requestRef.current += 1;
       inFlightRef.current = null;
+      queuedCheckRef.current = null;
       subscription.unsubscribe();
       timers.forEach(clearTimeout);
       clearInterval(interval);

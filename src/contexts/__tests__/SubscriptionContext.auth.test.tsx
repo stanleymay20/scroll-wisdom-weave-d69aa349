@@ -6,6 +6,7 @@ type Session = { user: { id: string } } | null;
 type SessionReply = { data: { session: Session }; error: null };
 type BillingReply = { data: { subscribed: boolean; tier: string }; error: null };
 const mock = vi.hoisted(() => ({
+  check: undefined as undefined | ((force?: boolean) => Promise<void>),
   listener: undefined as undefined | ((event: string, session: Session) => void),
   getSession: vi.fn(), invoke: vi.fn(), profile: vi.fn(), unsubscribe: vi.fn(),
 }));
@@ -18,7 +19,7 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: {
   from: () => ({ select: () => ({ or: () => ({ maybeSingle: mock.profile }), eq: () => ({ eq: () => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null }) }) }) }) }),
 } }));
 function deferred<T>() { let resolve!: (v: T) => void; const promise = new Promise<T>(r => { resolve = r; }); return { promise, resolve }; }
-function Probe() { const s = useSubscription(); return <div data-testid="state">{JSON.stringify({ id: s.user?.id ?? null, loading: s.isLoading, tier: s.tier })}</div>; }
+function Probe() { const s = useSubscription(); mock.check = s.checkSubscription; return <div data-testid="state">{JSON.stringify({ id: s.user?.id ?? null, loading: s.isLoading, tier: s.tier })}</div>; }
 function state() { return JSON.parse(screen.getByTestId('state').textContent!); }
 const session = (id: string) => ({ user: { id } });
 async function event(name: string, value: Session) { await act(async () => { mock.listener!(name, value); }); }
@@ -49,7 +50,7 @@ describe('auth lifecycle', () => {
     render(<SubscriptionProvider><Probe /></SubscriptionProvider>);
     await event('SIGNED_IN', session('a')); await tick();
     await event('SIGNED_OUT', null);
-    await act(async () => bill.resolve({ data: { subscribed: true, tier: 'pro' }, error: null }));
+    await act(async () => bill.resolve({ data: { subscribed: true, tier: 'premium' }, error: null }));
     expect(state()).toEqual({ id: null, loading: false, tier: 'free' });
   });
   it('discards old-account responses when switching accounts', async () => {
@@ -57,8 +58,22 @@ describe('auth lifecycle', () => {
     render(<SubscriptionProvider><Probe /></SubscriptionProvider>);
     await event('SIGNED_IN', session('a')); await tick();
     await event('SIGNED_IN', session('b')); await tick();
-    await act(async () => bill.resolve({ data: { subscribed: true, tier: 'pro' }, error: null }));
+    await act(async () => bill.resolve({ data: { subscribed: true, tier: 'premium' }, error: null }));
     expect(state()).toEqual({ id: 'b', loading: false, tier: 'free' });
+  });
+  it('queues a fresh entitlement lookup after a forced refresh overlaps billing', async () => {
+    const bill = deferred<BillingReply>(); mock.invoke.mockReturnValueOnce(bill.promise);
+    mock.invoke.mockResolvedValue({ data: { subscribed: true, tier: 'premium' }, error: null });
+    render(<SubscriptionProvider><Probe /></SubscriptionProvider>);
+    await event('SIGNED_IN', session('a')); await tick();
+    let refresh!: Promise<void>;
+    await act(async () => { refresh = mock.check!(true); });
+    await act(async () => {
+      bill.resolve({ data: { subscribed: false, tier: 'free' }, error: null });
+      await refresh;
+    });
+    expect(mock.invoke).toHaveBeenCalledTimes(2);
+    expect(state().tier).toBe('premium');
   });
   it('keeps identity when billing fails', async () => {
     mock.invoke.mockResolvedValue({ data: null, error: new Error('billing unavailable') });
