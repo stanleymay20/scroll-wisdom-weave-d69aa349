@@ -27,3 +27,10 @@ export function resolveSupabaseBuildPublishableKey(envKey, configText) {
   if (!key) throw new Error('Set VITE_SUPABASE_PUBLISHABLE_KEY or a known project_id in supabase/config.toml before building.');
   return key;
 }
+
+export function resolveSupabaseBuildProjectId(envProjectId, configText) {
+  if (envProjectId?.trim()) return envProjectId.trim();
+  const projectRef = committedProjectRef(configText);
+  if (!projectRef) throw new Error('Set VITE_SUPABASE_PROJECT_ID or a valid project_id in supabase/config.toml before building.');
+  return projectRef;
+}

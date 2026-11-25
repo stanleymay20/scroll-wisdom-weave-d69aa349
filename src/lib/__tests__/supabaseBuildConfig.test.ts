@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSupabaseBuildUrl, resolveSupabaseBuildPublishableKey } from '../../../scripts/supabase-build-config.mjs';
+import { resolveSupabaseBuildUrl, resolveSupabaseBuildPublishableKey, resolveSupabaseBuildProjectId } from '../../../scripts/supabase-build-config.mjs';
 describe('public Supabase build URL', () => {
   it('preserves explicitly configured endpoints, including local tests', () => {
     expect(resolveSupabaseBuildUrl('http://127.0.0.1:54321', 'project_id = "lrricdforqfkaaciammv"')).toBe('http://127.0.0.1:54321');
@@ -24,5 +24,11 @@ describe('public Supabase build publishable key', () => {
   });
   it('fails clearly for an unknown project', () => {
     expect(() => resolveSupabaseBuildPublishableKey('', 'project_id = "abcdefghijklmnopqrst"')).toThrow('Set VITE_SUPABASE_PUBLISHABLE_KEY');
+  });
+});
+
+describe('public Supabase build project id', () => {
+  it('falls back to the committed project when hosted builds omit it', () => {
+    expect(resolveSupabaseBuildProjectId(undefined, 'project_id = "lrricdforqfkaaciammv"')).toBe('lrricdforqfkaaciammv');
   });
 });

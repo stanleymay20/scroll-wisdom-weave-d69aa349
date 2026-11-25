@@ -4,7 +4,7 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 import { readFileSync, writeFileSync } from "node:fs";
-import { resolveSupabaseBuildUrl, resolveSupabaseBuildPublishableKey } from "./scripts/supabase-build-config.mjs";
+import { resolveSupabaseBuildUrl, resolveSupabaseBuildPublishableKey, resolveSupabaseBuildProjectId } from "./scripts/supabase-build-config.mjs";
 import { execFileSync } from "node:child_process";
 import type { Plugin } from "vite";
 import { resolveBuildCommit, resolveProductionBuildCommit } from "./scripts/build-commit.mjs";
@@ -54,6 +54,10 @@ export default defineConfig(({ mode }) => {
     process.env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY,
     supabaseConfigText,
   );
+  const supabaseProjectId = resolveSupabaseBuildProjectId(
+    process.env.VITE_SUPABASE_PROJECT_ID || env.VITE_SUPABASE_PROJECT_ID,
+    supabaseConfigText,
+  );
   const buildTime = process.env.BUILD_TIME ?? new Date().toISOString();
   const { commit, source: commitSource } = mode === "production" ? resolveProductionBuildCommit() : resolveBuildCommit();
   const source = computeSourceFingerprint();
@@ -66,6 +70,7 @@ export default defineConfig(({ mode }) => {
   define: {
     "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
     "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabasePublishableKey),
+    "import.meta.env.VITE_SUPABASE_PROJECT_ID": JSON.stringify(supabaseProjectId),
     __BUILD_TIME__: JSON.stringify(buildTime),
     __BUILD_ID__: JSON.stringify(buildId),
   },
