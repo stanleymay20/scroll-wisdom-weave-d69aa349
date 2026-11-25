@@ -4,7 +4,7 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 import { readFileSync, writeFileSync } from "node:fs";
-import { resolveSupabaseBuildUrl } from "./scripts/supabase-build-config.mjs";
+import { resolveSupabaseBuildUrl, resolveSupabaseBuildPublishableKey } from "./scripts/supabase-build-config.mjs";
 import { execFileSync } from "node:child_process";
 import type { Plugin } from "vite";
 import { resolveBuildCommit, resolveProductionBuildCommit } from "./scripts/build-commit.mjs";
@@ -45,9 +45,14 @@ export default defineConfig(({ mode }) => {
   // Hosted builds can omit the URL even when the public key is configured.
   // Resolve the canonical public endpoint at build time, never from user input.
   const env = loadEnv(mode, process.cwd(), 'VITE_');
+  const supabaseConfigText = readFileSync(new URL('./supabase/config.toml', import.meta.url), 'utf8');
   const supabaseUrl = resolveSupabaseBuildUrl(
     process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL,
-    readFileSync(new URL('./supabase/config.toml', import.meta.url), 'utf8'),
+    supabaseConfigText,
+  );
+  const supabasePublishableKey = resolveSupabaseBuildPublishableKey(
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    supabaseConfigText,
   );
   const buildTime = process.env.BUILD_TIME ?? new Date().toISOString();
   const { commit, source: commitSource } = mode === "production" ? resolveProductionBuildCommit() : resolveBuildCommit();
@@ -60,6 +65,7 @@ export default defineConfig(({ mode }) => {
   return ({
   define: {
     "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
+    "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabasePublishableKey),
     __BUILD_TIME__: JSON.stringify(buildTime),
     __BUILD_ID__: JSON.stringify(buildId),
   },
