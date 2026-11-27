@@ -3,11 +3,9 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'app.lovable.8a3582c02c2b49a9957f5eb218b15058',
   appName: 'ScrollLibrary',
-  webDir: 'dist',
-  server: {
-    url: 'https://8a3582c0-2c2b-49a9-957f-5eb218b15058.lovableproject.com?forceHideBadge=true',
-    cleartext: true
-  },
+  webDir: 'dist-native.local',
+  // Packaged assets only; never load a remote preview server.
+  server: { cleartext: false },
   ios: {
     contentInset: 'always',
     backgroundColor: '#0f172a',
@@ -16,7 +14,7 @@ const config: CapacitorConfig = {
   },
   android: {
     backgroundColor: '#0f172a',
-    allowMixedContent: true,
+    allowMixedContent: false,
     captureInput: true,
     webContentsDebuggingEnabled: false
   },

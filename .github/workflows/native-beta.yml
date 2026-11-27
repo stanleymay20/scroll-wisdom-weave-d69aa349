@@ -1,0 +1,121 @@
+name: Native betas (manual, Test only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_test_only:
+        description: Confirm isolated Test backend and approved app identity prerequisites
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-beta-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: 1.2.23
+  MOBILE_TEST_BACKEND_CONFIRMED: ${{ inputs.confirm_test_only && 'true' || 'false' }}
+
+jobs:
+  android:
+    if: inputs.confirm_test_only
+    environment: native-beta-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      MOBILE_TEST_PROJECT_ID: ${{ vars.MOBILE_TEST_PROJECT_ID }}
+      MOBILE_TEST_BACKEND_URL: ${{ vars.MOBILE_TEST_BACKEND_URL }}
+      MOBILE_TEST_PUBLISHABLE_KEY: ${{ secrets.MOBILE_TEST_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.5'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run test -- src/lib/__tests__/nativeBetaConfig.test.ts src/lib/__tests__/nativeBuildConfig.test.ts
+      - run: bun run native:preflight
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android API 36 build tools
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - run: bun run native:build
+      - run: bun scripts/native-targets.ts android
+      - run: bun scripts/verify-native-assets.mjs && bunx --no-install cap sync android
+      - name: Build debug APK with template-pinned Gradle (no release signing)
+        working-directory: android
+        run: ./gradlew --no-daemon clean assembleDebug
+      - name: Record exact source and APK digest
+        run: |
+          mkdir -p native-artifacts.local
+          cp android/app/build/outputs/apk/debug/app-debug.apk native-artifacts.local/scrolllibrary-debug.apk
+          cp dist-native.local/native-beta.json native-artifacts.local/
+          printf '%s\n' "$GITHUB_SHA" > native-artifacts.local/source-sha.txt
+          sha256sum native-artifacts.local/scrolllibrary-debug.apk > native-artifacts.local/SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: scrolllibrary-android-debug-${{ github.sha }}
+          path: native-artifacts.local/
+          if-no-files-found: error
+          retention-days: 14
+
+  ios-simulator:
+    if: inputs.confirm_test_only
+    environment: native-beta-test
+    runs-on: macos-26
+    timeout-minutes: 40
+    env:
+      MOBILE_TEST_PROJECT_ID: ${{ vars.MOBILE_TEST_PROJECT_ID }}
+      MOBILE_TEST_BACKEND_URL: ${{ vars.MOBILE_TEST_BACKEND_URL }}
+      MOBILE_TEST_PUBLISHABLE_KEY: ${{ secrets.MOBILE_TEST_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.5'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run test -- src/lib/__tests__/nativeBetaConfig.test.ts src/lib/__tests__/nativeBuildConfig.test.ts
+      - run: bun run native:preflight
+      - name: Verify Xcode 26 prerequisite
+        run: xcodebuild -version | tee /tmp/native-xcode-version && grep -E '^Xcode 26\.' /tmp/native-xcode-version
+      - run: bun run native:build
+      - run: bun scripts/native-targets.ts ios
+      - run: bun scripts/verify-native-assets.mjs && bunx --no-install cap sync ios && bun scripts/pin-native-ios.mjs
+      - name: Build unsigned simulator app (never a device IPA)
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath native-artifacts.local/derived \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO clean build
+      - name: Package simulator artifact and exact source evidence
+        run: |
+          mkdir -p native-artifacts.local/export
+          ditto -c -k --sequesterRsrc --keepParent native-artifacts.local/derived/Build/Products/Debug-iphonesimulator/App.app native-artifacts.local/export/scrolllibrary-simulator.zip
+          cp dist-native.local/native-beta.json native-artifacts.local/export/
+          cp ios/App/CapApp-SPM/Package.swift native-artifacts.local/export/
+          printf '%s\n' "$GITHUB_SHA" > native-artifacts.local/export/source-sha.txt
+          shasum -a 256 native-artifacts.local/export/scrolllibrary-simulator.zip > native-artifacts.local/export/SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: scrolllibrary-ios-simulator-${{ github.sha }}
+          path: native-artifacts.local/export/
+          if-no-files-found: error
+          retention-days: 14
