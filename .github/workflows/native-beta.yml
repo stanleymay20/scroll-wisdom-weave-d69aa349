@@ -1,13 +1,21 @@
-name: Native betas (manual, Test only)
+name: Native betas (manual, Test or offline fixture)
 
 on:
   workflow_dispatch:
     inputs:
       confirm_test_only:
-        description: Confirm isolated Test backend and approved app identity prerequisites
+        description: Confirm no Live access (isolated Test app or non-distributable offline fixture)
         required: true
         type: boolean
         default: false
+      build_kind:
+        description: Offline fixtures compile only; they are not distributable ScrollLibrary betas
+        required: true
+        type: choice
+        default: offline-compile-fixture
+        options:
+          - offline-compile-fixture
+          - test-app
 
 permissions:
   contents: read
@@ -18,7 +26,7 @@ concurrency:
 
 env:
   BUN_VERSION: 1.2.23
-  MOBILE_TEST_BACKEND_CONFIRMED: ${{ inputs.confirm_test_only && 'true' || 'false' }}
+  MOBILE_TEST_BACKEND_CONFIRMED: ${{ inputs.confirm_test_only && inputs.build_kind == 'test-app' && 'true' || 'false' }}
 
 jobs:
   android:
@@ -43,7 +51,8 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bun run test -- src/lib/__tests__/nativeBetaConfig.test.ts src/lib/__tests__/nativeBuildConfig.test.ts
-      - run: bun run native:preflight
+      - if: inputs.build_kind == 'test-app'
+        run: bun run native:preflight
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -51,22 +60,28 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install Android API 36 build tools
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
-      - run: bun run native:build
+      - if: inputs.build_kind == 'test-app'
+        run: bun run native:build
+      - if: inputs.build_kind == 'offline-compile-fixture'
+        run: bun run native:fixture
       - run: bun scripts/native-targets.ts android
-      - run: bun scripts/verify-native-assets.mjs && bunx --no-install cap sync android
+      - if: inputs.build_kind == 'test-app'
+        run: bun scripts/verify-native-assets.mjs && bunx --no-install cap sync android
+      - if: inputs.build_kind == 'offline-compile-fixture'
+        run: bun scripts/verify-native-assets.mjs --offline-compile-fixture && bunx --no-install cap sync android
       - name: Build debug APK with template-pinned Gradle (no release signing)
         working-directory: android
-        run: ./gradlew --no-daemon clean assembleDebug
+        run: ./gradlew --no-daemon clean testDebugUnitTest compileDebugAndroidTestJavaWithJavac assembleDebug
       - name: Record exact source and APK digest
         run: |
           mkdir -p native-artifacts.local
-          cp android/app/build/outputs/apk/debug/app-debug.apk native-artifacts.local/scrolllibrary-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk native-artifacts.local/scrolllibrary-${{ inputs.build_kind }}-debug.apk
           cp dist-native.local/native-beta.json native-artifacts.local/
           printf '%s\n' "$GITHUB_SHA" > native-artifacts.local/source-sha.txt
-          sha256sum native-artifacts.local/scrolllibrary-debug.apk > native-artifacts.local/SHA256SUMS
+          sha256sum native-artifacts.local/*.apk > native-artifacts.local/SHA256SUMS
       - uses: actions/upload-artifact@v7
         with:
-          name: scrolllibrary-android-debug-${{ github.sha }}
+          name: scrolllibrary-android-${{ inputs.build_kind }}-${{ github.sha }}
           path: native-artifacts.local/
           if-no-files-found: error
           retention-days: 14
@@ -93,12 +108,19 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bun run test -- src/lib/__tests__/nativeBetaConfig.test.ts src/lib/__tests__/nativeBuildConfig.test.ts
-      - run: bun run native:preflight
+      - if: inputs.build_kind == 'test-app'
+        run: bun run native:preflight
       - name: Verify Xcode 26 prerequisite
         run: xcodebuild -version | tee /tmp/native-xcode-version && grep -E '^Xcode 26\.' /tmp/native-xcode-version
-      - run: bun run native:build
+      - if: inputs.build_kind == 'test-app'
+        run: bun run native:build
+      - if: inputs.build_kind == 'offline-compile-fixture'
+        run: bun run native:fixture
       - run: bun scripts/native-targets.ts ios
-      - run: bun scripts/verify-native-assets.mjs && bunx --no-install cap sync ios && bun scripts/pin-native-ios.mjs
+      - if: inputs.build_kind == 'test-app'
+        run: bun scripts/verify-native-assets.mjs && bunx --no-install cap sync ios && bun scripts/pin-native-ios.mjs
+      - if: inputs.build_kind == 'offline-compile-fixture'
+        run: bun scripts/verify-native-assets.mjs --offline-compile-fixture && bunx --no-install cap sync ios && bun scripts/pin-native-ios.mjs
       - name: Build unsigned simulator app (never a device IPA)
         run: |
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
@@ -108,14 +130,14 @@ jobs:
       - name: Package simulator artifact and exact source evidence
         run: |
           mkdir -p native-artifacts.local/export
-          ditto -c -k --sequesterRsrc --keepParent native-artifacts.local/derived/Build/Products/Debug-iphonesimulator/App.app native-artifacts.local/export/scrolllibrary-simulator.zip
+          ditto -c -k --sequesterRsrc --keepParent native-artifacts.local/derived/Build/Products/Debug-iphonesimulator/App.app native-artifacts.local/export/scrolllibrary-${{ inputs.build_kind }}-simulator.zip
           cp dist-native.local/native-beta.json native-artifacts.local/export/
           cp ios/App/CapApp-SPM/Package.swift native-artifacts.local/export/
           printf '%s\n' "$GITHUB_SHA" > native-artifacts.local/export/source-sha.txt
-          shasum -a 256 native-artifacts.local/export/scrolllibrary-simulator.zip > native-artifacts.local/export/SHA256SUMS
+          shasum -a 256 native-artifacts.local/export/*.zip > native-artifacts.local/export/SHA256SUMS
       - uses: actions/upload-artifact@v7
         with:
-          name: scrolllibrary-ios-simulator-${{ github.sha }}
+          name: scrolllibrary-ios-${{ inputs.build_kind }}-simulator-${{ github.sha }}
           path: native-artifacts.local/export/
           if-no-files-found: error
           retention-days: 14

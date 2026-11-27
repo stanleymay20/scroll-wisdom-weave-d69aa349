@@ -1,7 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.8a3582c02c2b49a9957f5eb218b15058',
+  // Reversible beta-only identity; not a registered store/production identity.
+  appId: 'org.scrolllibrary.beta',
   appName: 'ScrollLibrary',
   webDir: 'dist-native.local',
   // Packaged assets only; never load a remote preview server.

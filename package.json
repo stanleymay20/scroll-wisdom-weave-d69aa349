@@ -24,6 +24,8 @@
     "native:preflight": "bun scripts/native-preflight.ts",
     "native:build": "vite build --config vite.native.config.ts --mode native-beta",
     "native:targets": "bun scripts/native-targets.ts",
+    "native:fixture": "bun scripts/native-offline-fixture.ts",
+    "native:sync:fixture": "bun scripts/verify-native-assets.mjs --offline-compile-fixture && cap sync && bun scripts/pin-native-ios.mjs",
     "native:sync": "bun scripts/verify-native-assets.mjs && cap sync && bun scripts/pin-native-ios.mjs",
     "native:android": "bun run native:preflight && bun run native:build && bun scripts/native-targets.ts android && bun scripts/verify-native-assets.mjs && cap sync android && cd android && ./gradlew --no-daemon clean assembleDebug",
     "native:ios": "bun run native:preflight && bun run native:build && bun scripts/native-targets.ts ios && bun scripts/verify-native-assets.mjs && cap sync ios && bun scripts/pin-native-ios.mjs && xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath native-artifacts.local/ios CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO clean build",

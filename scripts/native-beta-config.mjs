@@ -43,3 +43,15 @@ export function nativeAssetDigest(assets) {
   }
   return hash.digest('hex');
 }
+
+export function assertNativeAssetIdentity(identity, { compileFixture, appId, beta }) {
+  if (compileFixture) {
+    if (identity.environment !== 'offline-compile-fixture' || identity.distributable !== false || identity.appId !== appId) {
+      throw new Error('Explicit fixture sync requires a labelled, non-distributable offline compile fixture for this beta identity.');
+    }
+    return;
+  }
+  if (!beta || identity.environment !== 'test' || identity.projectId !== beta.projectId) {
+    throw new Error('Test-only sync rejects compile fixtures and mismatched backend assets. Rebuild.');
+  }
+}
